@@ -17,9 +17,22 @@ PC 运行 PX4 SITL + Gazebo Docker 仿真，以及 QGroundControl、GUI 和可�
 
 ## 当前可运行内容
 
-Stage 1 已有 ROS 常驻模型聊天链路，操作见 [Hands-on](docs/stage1/Hands-on.md)。
-PC 入口在 `stage1/`，板端待传文件在 `stage1/robopi/`，上游推理产物和模型需课前获取。
-Stage 3 提供 Jev API 包装及文本决策示例。仿真、飞行算法和聊天 GUI 尚未实现。
+- Stage 1：ROS 常驻模型聊天链路，PC 入口位于 `stage1/`，板端文件位于 `stage1/robopi/`；上游运行产物和模型需课前获取，操作见 [Hands-on](docs/stage1/Hands-on.md)。
+- Stage 2：PC PX4/Gazebo 标准机 `x500_experiment`（RGBD＋MID-360S 规则扫描近似），QGC 操作、四图展示和排障见 [Hands-on](docs/stage2/Hands-on.md)。用户已确认展示可用，改装后的完整飞行仍待验收；历史证据见 [实测记录](docs/stage2/Validation.md)。
+- Stage 3：Jev API 包装和文本决策示例；自主飞行 API、算法和 PC 聊天 GUI 尚未实现。
+
+## Stage 2 标准机入口
+
+教师课前准备镜像、QGC、图形环境及 `uv sync --extra stage2`。在 **PC 仓库根目录**按 [启动步骤](docs/stage2/Hands-on.md#2-学员启动单机仿真pc)运行标准机，两个模型目录必须同时挂载。仿真就绪后，在两个终端执行：
+
+```bash
+./stage2/show_sensors.sh  # WebUI：RGB、D，http://127.0.0.1:8090
+./stage2/show_rviz.sh          # 两个 RViz：雷达点云、同帧表面体素
+```
+
+主入口在 `stage2/`；`models/x500_experiment/` 负责整机组合与 RGBD，`models/mid360s/` 维护雷达参数，`configure_mid360s.py` 提供三档扫描预算。`sensor_receiver.py`/`sensor_web.py` 负责接收与网页，`rviz_cloud_bridge.py` 是雷达和深度点云共用的 ROS 处理器。深度点云为 [补充实验](docs/stage2/Hands-on.md#调参和补充实验)。近似范围与官方规格对照见 [MID-360S](docs/stage2/MID-360S.md)。
+
+## Stage 3 文本示例
 
 在 PC 上使用 Python 3.12+ 和 uv：
 

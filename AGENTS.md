@@ -14,12 +14,13 @@
 - RoboPi：运行 OpenHarmony，模拟无人机机载算力板，承载 ROS 自主飞行、视觉、多机协作与大模型推理。
 - HDC：用于板端 shell、文件传输、部署与诊断。以太网用于 PC 与板端运行时通信；不要默认 HDC 已通过以太网配置好。
 - PX4 是飞控；RoboPi 是算力板。算法从 PC 迁移到 RoboPi，不应描述为部署到 PX4 飞控。
-- Stage 1 已验证 ROS 2 Humble、rmw_fastrtps_cpp、域 10 与板内 HTTP 127.0.0.1:8080；OpenHarmony AArch64、Linux 6.6.86、Python 3.12 ABI、Houmo 驱动 v1.4.0 与 TCIM v2.5.0 的证据见 docs/stage1/Hands-on.md。换设备或镜像时重新核实。PX4/Gazebo、飞行消息接口及后续 SDK 组合仍待确认。
+- Stage 1 已验证 ROS 2 Humble、rmw_fastrtps_cpp、域 10 与板内 HTTP 127.0.0.1:8080；OpenHarmony AArch64、Linux 6.6.86、Python 3.12 ABI、Houmo 驱动 v1.4.0 与 TCIM v2.5.0 的证据见 docs/stage1/Hands-on.md。换设备或镜像时重新核实。PC PX4/Gazebo 当前基线见 Stage 2 文档；飞行消息接口及后续 SDK 组合仍待确认。
 
 ## 当前事实
 
 - `stage3/jev.py` 已提供 Jev Decisions API 包装，`stage3/demo.py` 是文本情感决策示例。
-- Stage 1 常驻模型 ROS 聊天链路已有旧布局实测记录；当前文件重组后的部署尚待重新验收。飞行 API、仿真环境和 PC 聊天 GUI 尚未实现。
+- Stage 1 常驻模型 ROS 聊天链路已有旧布局实测记录；当前文件重组后的部署尚待重新验收。自主飞行 API 和 PC 聊天 GUI 尚未实现。
+- Stage 2 标准机为 `x500_experiment`（RGBD＋MID-360S 规则 GPU 扫描近似），引用独立 `mid360s` 模型；启动时两个模型目录均需挂载。四图基础展示已获用户确认，改装后完整飞行仍待验收；操作与实测证据分别见 `docs/stage2/Hands-on.md`、`docs/stage2/Validation.md`。
 - 路线与完成状态见 `docs/roadmap.md`。只有实际可运行并有验证证据的功能才标记完成。
 
 ## 实施原则

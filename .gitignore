@@ -19,4 +19,9 @@ wheels/
 /stage1/robopi/qwen_infer/
 *.pid
 *.lock
+!uv.lock
 *.log
+
+# 本地凭据与第三方参考检出（不作为课程运行依赖）
+/.aws
+/thirdparty/

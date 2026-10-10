@@ -1,0 +1,67 @@
+<?xml version='1.0' encoding='utf-8'?>
+<sdf version="1.9">
+  <model name="mid360s">
+    <link name="mid360s_link">
+      <inertial>
+        <mass>0.265</mass>
+        <inertia>
+          <ixx>0.000172802083333</ixx>
+          <iyy>0.000172802083333</iyy>
+          <izz>0.000186604166667</izz>
+        </inertia>
+      </inertial>
+      <visual name="mid360s_visual">
+        <geometry>
+          <box>
+            <size>0.065 0.065 0.060</size>
+          </box>
+        </geometry>
+        <material>
+          <ambient>0.15 0.18 0.22 1</ambient>
+          <diffuse>0.15 0.18 0.22 1</diffuse>
+        </material>
+      </visual>
+      <collision name="mid360s_collision">
+        <geometry>
+          <box>
+            <size>0.065 0.065 0.060</size>
+          </box>
+        </geometry>
+      </collision>
+      <sensor name="mid360s_approx" type="gpu_lidar">
+        <gz_frame_id>mid360s_sensor</gz_frame_id>
+        <pose>0 0 0.035 0 0 0</pose>
+        <topic>mid360s/scan</topic>
+        <update_rate>10</update_rate>
+        <always_on>1</always_on>
+        <visualize>false</visualize>
+        <ray>
+          <scan>
+            <horizontal>
+              <samples>512</samples>
+              <resolution>1</resolution>
+              <min_angle>-3.141592653589793</min_angle>
+              <max_angle>3.129320807286708</max_angle>
+            </horizontal>
+            <vertical>
+              <samples>16</samples>
+              <resolution>1</resolution>
+              <min_angle>-0.122173047639603</min_angle>
+              <max_angle>0.907571211037051</max_angle>
+            </vertical>
+          </scan>
+          <range>
+            <min>0.1</min>
+            <max>40</max>
+            <resolution>0.01</resolution>
+          </range>
+          <noise>
+            <type>gaussian</type>
+            <mean>0</mean>
+            <stddev>0.01</stddev>
+          </noise>
+        </ray>
+      </sensor>
+    </link>
+  </model>
+</sdf>

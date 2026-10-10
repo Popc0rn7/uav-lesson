@@ -11,6 +11,38 @@ HTTP 仅监听 127.0.0.1:8080，PC 仍通过 ROS 通信；模型启动时加载�
 - 现有启动入口针对已验证的 AArch64、内核 6.6.86 和 Houmo xh2a_drv v1.4.0；换镜像需重新核对驱动。
 - 实测局域网为 PC 192.168.99.115、RoboPi 192.168.99.145，通过 Wi-Fi。HDC 只用于部署和管理，不承载聊天消息。
 
+## PC：课前拉取 ROS Humble 镜像
+
+教师在课前完成下载；学员 PC 没有原生 ROS 时使用此镜像。前置条件：Linux PC 已安装 Docker、当前用户可访问 Docker daemon，网络可访问 Docker Hub，磁盘有足够空间。
+镜像使用现有聊天命令对应的 `osrf/ros:humble-desktop-jammy`，上游构建定义见 [OSRF Dockerfile](https://github.com/osrf/docker_images/blob/master/ros/humble/ubuntu/jammy/desktop/Dockerfile)。这是 PC 的 Linux ROS 环境；板端仍需适配 OpenHarmony 的 ROS 产物。
+
+在 **PC** 执行：
+
+```sh
+docker info
+docker pull osrf/ros:humble-desktop-jammy
+docker image inspect osrf/ros:humble-desktop-jammy \
+  --format '{{.Os}}/{{.Architecture}} {{json .RepoDigests}}'
+```
+
+成功判据：pull 正常结束，inspect 输出镜像架构和 `sha256` 摘要。教师记录实际摘要与 PC 架构；标签可能更新，后续授课可将本文运行命令中的镜像替换为记录的 `osrf/ros@sha256:…`，使用同一构建。
+
+在 **PC** 启动一次性容器，以下检查在 **Docker** 内执行：
+
+```sh
+docker run --rm --entrypoint /bin/bash osrf/ros:humble-desktop-jammy \
+  -lc 'source /opt/ros/humble/setup.bash && python3 -c "import rclpy; import std_msgs.msg; from rclpy.utilities import get_available_rmw_implementations; assert \"rmw_fastrtps_cpp\" in get_available_rmw_implementations(); print(\"ROS Humble / rclpy / std_msgs / Fast DDS OK\")"'
+```
+
+预期输出 `ROS Humble / rclpy / std_msgs / Fast DDS OK` 并正常退出；这只验证 PC 容器依赖，跨机聊天仍按后续步骤验收。
+
+常见失败与恢复：
+
+- Docker socket `permission denied`：按 PC 的 Docker 安装方式修复访问权限；`Cannot connect to the Docker daemon`：启动对应 daemon 后重试 `docker info`。
+- 拉取超时或连接失败：检查 PC 网络、Docker daemon 代理和 Docker Hub 可达性，再执行同一 pull；已有镜像层可复用。
+- `no matching manifest` 或 `exec format error`：检查 PC 架构与镜像支持的平台，改用已验收的匹配环境；换平台后重新验收。
+- 磁盘不足：检查 Docker 数据目录所在磁盘的剩余空间，确认可删除内容后清理，再重试。
+
 ## RoboPi：启动
 
 ```sh
@@ -47,7 +79,7 @@ export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
 python3 stage1/chat.py
 ```
 
-本机没有原生 ROS 时，使用课前已准备的镜像（Linux PC，仓库根目录）：
+本机没有原生 ROS 时，使用上述课前已拉取并自检的镜像（Linux PC，仓库根目录）：
 
 ```sh
 docker run --rm -it --network host \

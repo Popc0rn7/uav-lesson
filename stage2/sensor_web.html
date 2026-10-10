@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Stage 2 · 传感器观察台</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,sans-serif;background:#0b111b;color:#e8eef8}*{box-sizing:border-box}body{margin:0}main{max-width:1560px;margin:auto;padding:36px}header{display:flex;align-items:center;justify-content:space-between;gap:24px;margin-bottom:30px}.eyebrow{color:#59dcd0;letter-spacing:3px;font-size:12px}h1{font-size:30px;font-weight:600;margin:10px 0}p{color:#91a1b7;line-height:1.6}.badge{border:1px solid #314158;border-radius:24px;padding:10px 16px;font-size:13px;white-space:nowrap}.grid{display:grid;grid-template-columns:1fr 1fr;gap:22px}article{border:1px solid #263349;border-radius:18px;overflow:hidden;background:#111b29}.title{display:flex;justify-content:space-between;align-items:center;padding:20px 24px}h2{margin:0;font-size:19px}.state{color:#91a1b7;font-size:13px}.live{color:#59dcd0}.stale{color:#f3be69}.viewport{position:relative;background:#070c13;aspect-ratio:16/9;display:flex;align-items:center;justify-content:center}.viewport img{width:100%;height:100%;object-fit:contain}.placeholder{position:absolute;text-align:center;color:#91a1b7}#depth-viewport{aspect-ratio:16/9}canvas{width:100%;height:auto;display:block;background:#070c13}.meta{padding:18px 24px;font-size:13px;line-height:1.8;color:#91a1b7}.numbers{display:flex;gap:24px;flex-wrap:wrap;color:#e8eef8}.topic{font-family:monospace;font-size:11px;overflow-wrap:anywhere;margin-top:12px}.scale{height:8px;border-radius:4px;background:linear-gradient(90deg,rgb(34,211,238),rgb(168,85,247));margin:12px 0 5px}.labels{display:flex;justify-content:space-between}.footer{margin-top:24px;font-size:13px;color:#91a1b7}button{background:#1b2d40;border:1px solid #3a536d;color:#e8eef8;padding:10px 16px;border-radius:10px;cursor:pointer}@media(max-width:850px){main{padding:22px}.grid{grid-template-columns:1fr}header{align-items:flex-start;flex-wrap:wrap}h1{font-size:24px}}
+</style>
+<main><header><div><div class="eyebrow">STAGE 02 / SENSOR OBSERVATORY</div><h1>传感器观察台</h1><p>从机载相机出发，观察仿真世界。</p></div><div><span id="connection" class="badge">连接中</span> <button id="pause">暂停显示</button></div></header>
+<div class="grid">
+<article><div class="title"><h2>RGB <small style="color:#91a1b7;font-weight:400">/ 彩色画面</small></h2><span id="rgb-state" class="state">等待数据</span></div><div class="viewport"><img id="rgb" alt="机载 RGB 相机画面" hidden><div id="rgb-placeholder" class="placeholder">等待 RGB 相机<br>收到第一帧后自动显示</div></div><div class="meta"><div id="rgb-info" class="numbers">尚无图像</div><div id="rgb-topic" class="topic"></div></div></article>
+<article><div class="title"><h2>Depth <small style="color:#91a1b7;font-weight:400">/ 深度画面</small></h2><span id="depth-state" class="state">等待数据</span></div><div class="viewport" id="depth-viewport"><img id="depth" alt="深度伪彩色画面" hidden><div id="depth-placeholder" class="placeholder">等待深度相机<br>深色像素表示无效测距</div></div><div class="meta"><div id="depth-info" class="numbers">尚无图像</div><div class="scale"></div><div class="labels"><span id="near">近</span><span id="far">远</span></div><div id="depth-topic" class="topic"></div></div></article>
+</div><div class="footer">深度单位：米 · 固定色标，超出范围的值使用端点颜色 · 两路独立更新，未做时间同步或 RGBD 对齐 · 暂停显示不暂停仿真</div></main>
+<script>
+let paused=false,targetFps=20;const shown={},displayTimes={rgb:[],depth:[]};const el=id=>document.getElementById(id);
+el('pause').onclick=()=>{paused=!paused;el('pause').textContent=paused?'继续显示':'暂停显示';};
+async function imageLoop(name){
+ const started=performance.now();
+ if(!paused){
+  try{
+   const response=await fetch(`/${name}.jpg?t=${Date.now()}`,{signal:AbortSignal.timeout(3000)});
+   if(response.ok){
+    const count=response.headers.get('X-Frame-Count');
+    const blob=await response.blob();
+    if(count!==shown[name]?.count){
+     const url=URL.createObjectURL(blob),image=new Image();
+     try{
+      image.src=url;await image.decode();
+      if(!paused){
+       const previous=el(name).src;el(name).src=url;el(name).hidden=false;el(name+'-placeholder').hidden=true;
+       if(previous.startsWith('blob:'))URL.revokeObjectURL(previous);
+       const now=performance.now(),times=displayTimes[name];times.push(now);while(times.length>60)times.shift();
+       shown[name]={count,fps:times.length>1?(times.length-1)*1000/(times.at(-1)-times[0]):0,
+                    ageMs:Number(response.headers.get('X-Frame-Age-Ms'))+now-started};
+      }else URL.revokeObjectURL(url);
+     }catch(error){URL.revokeObjectURL(url);throw error;}
+    }
+   }
+  }catch(error){el(name+'-state').textContent='图像连接异常';}
+ }
+ // 上一帧下载和解码完成才请求下一帧，每路最多一个请求，不排队。
+ setTimeout(()=>imageLoop(name),Math.max(0,1000/targetFps-(performance.now()-started)));
+}
+async function refresh(){
+ try{
+  const response=await fetch('/api/status',{signal:AbortSignal.timeout(3000)});if(!response.ok)throw Error('HTTP '+response.status);
+  const data=await response.json();targetFps=data.fps;el('connection').textContent=paused?'显示已暂停':'数据服务已连接';
+  el('near').textContent=data.near+' m · 近';el('far').textContent=data.far+' m · 远';
+  for(const name of ['rgb','depth']){
+   const s=data.streams[name],fresh=s.age_s!==null&&s.age_s<3;
+   el(name+'-topic').textContent=s.topic;
+   el(name+'-state').textContent=paused?'显示已暂停':s.error?'数据错误':s.age_s===null?'等待数据':fresh?'实时接收':'数据已停更';
+   el(name+'-state').className='state '+(fresh&&!s.error?'live':'stale');
+   if(s.count){
+    const display=shown[name];
+    el(name+'-info').textContent=`${s.source_width} × ${s.source_height} · 仿真 ${s.sim_time.toFixed(3)} s · 更新于 ${s.age_s.toFixed(1)} s 前`+
+      ` · 接收 ${s.rx_fps.toFixed(1)} FPS · 编码 ${s.encode_fps.toFixed(1)} FPS / ${s.encode_ms.toFixed(1)} ms · 原始传输 ${s.transfer_ms.toFixed(1)} ms`+
+      (display?` · 显示 ${display.fps.toFixed(1)} FPS · 接收至解码约 ${display.ageMs.toFixed(0)} ms`:'');
+    if(name==='depth'&&s.min_m!==null)el(name+'-info').textContent+=` · 有效范围 ${s.min_m.toFixed(2)}–${s.max_m.toFixed(2)} m`;
+   }
+   if(s.error)el(name+'-info').textContent=s.error;
+  }
+ }catch(error){el('connection').textContent='数据服务已断开';for(const name of ['rgb','depth']){el(name+'-state').textContent='连接中断';el(name+'-state').className='state stale';}}
+ setTimeout(refresh,500);
+}refresh();imageLoop('rgb');imageLoop('depth');
+</script></html>

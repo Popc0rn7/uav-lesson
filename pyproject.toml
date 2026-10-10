@@ -1,10 +1,16 @@
 [project]
 name = "uav-lesson"
 version = "0.1.0"
-description = "Add your description here"
+description = "无人机实践课程：RoboPi、PX4/Gazebo 仿真与自主飞行实验"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "dotenv>=0.9.9",
     "requests>=2.34.2",
+]
+
+[project.optional-dependencies]
+stage2 = [
+    "numpy>=2.5.3",
+    "pillow>=12.3.0",
 ]

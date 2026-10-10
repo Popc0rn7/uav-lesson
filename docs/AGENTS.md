@@ -14,6 +14,8 @@
 
 ## 1. PC：获取上游运行产物
 
+PC 无原生 ROS 时，先按 [Hands-on：课前拉取 ROS Humble 镜像](stage1/Hands-on.md#pc课前拉取-ros-humble-镜像) 完成 Docker 镜像下载、自检并记录摘要。此步骤在教师准备阶段完成。
+
 前置条件：上游已完成目标 OpenHarmony 构建并验证版本。本工作区来源为 ../postmo-modelzoo/qwen_ohos_infer/dist。
 在课程仓库根目录执行：
 

@@ -19,6 +19,7 @@
 ## 当前事实
 
 - `stage3/jev.py` 已提供 Jev Decisions API 包装，`stage3/demo.py` 是文本情感决策示例。
+- Stage 3 当前收束点：SUPER / FAST-LIO2 在 Humble Docker 中，使用 Gazebo 实体扫描、30 Hz 配准点云与约 200 Hz IMU 传播状态；带可选墙面标记的 2 m/s 往返与一次雷达失流降落已验收。原赛道纯 LIO、LIO 5 档、实机与板端仍待验证。入口、证据和并行开发边界见 docs/stage3/Development.md。
 - Stage 1 常驻模型 ROS 聊天链路已有旧布局实测记录；当前文件重组后的部署尚待重新验收。自主飞行 API 和 PC 聊天 GUI 尚未实现。
 - Stage 2 标准机为 `x500_experiment`（Orbbec Gemini 2 RGBD 几何近似＋MID-360S 规则 GPU 扫描近似），引用独立 `mid360s` 模型；启动时两个模型目录均需挂载。四图基础展示已获用户确认，改装后完整飞行仍待验收；操作与实测证据分别见 `docs/stage2/Hands-on.md`、`docs/stage2/Validation.md`。
 - 路线与完成状态见 `docs/roadmap.md`。只有实际可运行并有验证证据的功能才标记完成。

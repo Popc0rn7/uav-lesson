@@ -1,0 +1,12 @@
+# 本机已验收的 Humble 开发环境快照；由 super_docker.py build 生成。
+ARG BASE_IMAGE=uav-stage3-ros-base:local
+FROM ${BASE_IMAGE}
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libdw-dev libgz-transport13-dev libgz-msgs10-dev \
+    && rm -rf /var/lib/apt/lists/*
+COPY gcopter_install/ /gcopter_install/
+ENV ROS_DOMAIN_ID=10 ROS_LOCALHOST_ONLY=0 RMW_IMPLEMENTATION=rmw_fastrtps_cpp \
+    GZ_PARTITION=uav-stage3 ROS_LOG_DIR=/tmp/stage3-ros-logs PYTHONDONTWRITEBYTECODE=1
+USER 1000:1000
+ENTRYPOINT ["/bin/bash", "/lesson/stage3/run_super_nodes.sh"]

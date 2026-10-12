@@ -25,3 +25,7 @@ wheels/
 # 本地凭据与第三方参考检出（不作为课程运行依赖）
 /.aws
 /thirdparty/
+
+# Stage 3 由生成器创建的仿真运行产物；源配置和生成器入库
+/stage3/models/
+/stage3/worlds/

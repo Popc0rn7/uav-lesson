@@ -22,7 +22,7 @@
 
 此阶段暂不使用算力板，在 PC 跑通飞控与仿真链路。
 
-标准机已确定为 `x500_experiment`（RGBD＋MID-360S 规则 GPU 扫描近似），后续阶段沿用。PC 启动与 QGC 操作见 [Hands-on](stage2/Hands-on.md)，数据链路、性能和历史证据见 [实测记录](stage2/Validation.md)。当前 Baylands 模型加载与雷达/机体 IMU 数据已验证，用户已确认 RGB、D、雷达点云、表面体素展示可用。改装后的完整飞行、新 PC 复现、复杂场景性能和真实硬件对照仍待验收。
+标准机已确定为 `x500_experiment`（Orbbec Gemini 2 RGBD 几何近似＋MID-360S 规则 GPU 扫描近似），后续阶段沿用。PC 启动与 QGC 操作见 [Hands-on](stage2/Hands-on.md)，数据链路、性能和历史证据见 [实测记录](stage2/Validation.md)。当前 Baylands 模型加载与雷达/机体 IMU 数据已验证，用户已确认 RGB、D、雷达点云、表面体素展示可用。改装后的完整飞行、新 PC 复现、复杂场景性能和真实硬件对照仍待验收。
 
 实施顺序：先固定 PX4、Gazebo、QGroundControl 的版本组合，交付单机空场景的启动、连接、起飞、悬停、降落与重置；验收通过后加入一个赛道的检查点与本地计时，再扩展三个赛道、传感器可视化和在线排行榜。JoyCan 在核实来源与连接方式后接入。为 Stage 3 预留单机标识、通信端点、坐标系与单位、仿真时间和状态接口记录；本阶段验收仍在 PC 完成。镜像构建、资源下载与版本核实属于教师课前准备。
 
@@ -42,6 +42,8 @@
 
 将已在 PC 跑通的 ROS 算法迁移到 RoboPi。此环节内容较多，授课前确定必做主线与选做项目。
 
+本轮优先完成 GCOPTER、SUPER 和一个目标识别/追踪组合，均按 ROS Docker 验证 → RoboPi 迁移 → 控制 PC 标准机验收推进；多机任务后续开展。来源、接口缺口和环境检查见 [Stage 3 实施入口](stage3/Bring-up.md)。SUPER 已通过本机 Humble Docker 的空场景 PX4 闭环、perfect_drone_sim corridor 往返，以及 Gazebo 实体 corridor 的 2/5 m/s 高度受限往返与故障降落；统一算法评测和板端迁移尚未完成。视觉首选候选为 YOLOX 小模型＋ByteTrack，待目标类别和板端推理条件确认。
+
 1. 自主飞行：在相同赛道／密林场景对比 GCOPTER 与 SUPER 的速度和成功率。
 2. 视觉算法：目标识别与跟踪，结合自主飞行完成任务。
 3. 多机编队：参考 CAT-ORA，提供方阵变横排 demo，练习方阵变竖列或自定义队形。
@@ -49,6 +51,9 @@
 
 - [ ] PC ↔ RoboPi ROS 通信与板端控制单机的最小闭环。
 - [ ] 复现 GCOPTER 和 SUPER，并建立统一评测配置。
+- [x] SUPER 在 ROS 2 Humble Docker 与 PX4/Gazebo Docker 之间控制标准机完成空场景起飞、到点、降落；[步骤](stage3/Hands-on.md)与[实测](stage3/Validation.md)。密林避障、SUPER 上板和统一评测仍待完成。
+- [x] SUPER 自带 perfect_drone_sim 中等难度 corridor 在 Humble Docker 完成 100 m 往返，提供计时、速度、点云净空与可重置入口；[操作与边界](stage3/Hands-on.md)。
+- [x] SUPER 在 Gazebo 实体 corridor 完成高度受限的 2/5 m/s 冷启动往返；实体扫描、Gazebo/RViz 双窗口、碰撞正例及雷达/规划器/时钟故障后的自动降落均已实测；[步骤](stage3/Hands-on.md)与[证据](stage3/Validation.md)。实机 MID-360、上板和统一算法对照仍待完成；上述历史结果按各自传感器与定位配置区分。
 - [ ] 复现目标识别与跟踪，确定模型和传感器接口。
 - [ ] 复现 CAT-ORA，提供队形任务接口与多机配置。
 - [ ] 复现 RACER，准备探索地图与模拟配送任务。
@@ -79,3 +84,5 @@
 3. **课堂基础体验**：HDC、编译示例、LLM chat、可视化、三个赛道与排行榜。
 4. **算法应用**：逐项复现单机、视觉、编队与探索，确定 80 分钟内的必做内容。
 5. **语义任务**：模型适配、VQA、导航与 Jev 对照，形成可重复授课的完整流程。
+
+Stage 3 当前收束点：MID-360 视场与时间分片扫描近似、FAST-LIO2 的 30 Hz 配准点云及约 200 Hz IMU 传播状态已在本机跑通；带可选墙面立体标记的 2 m/s 往返通过，GNSS 融合关闭，飞控保留气压降落后备。原赛道纯 LIO、LIO 5 档、实机精确时序/标定、多轮成功率及 RoboPi 迁移仍待验证。旧配置证据独立保留；后续分工见 [开发交接](stage3/Development.md)。

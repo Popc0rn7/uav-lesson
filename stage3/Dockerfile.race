@@ -1,0 +1,8 @@
+FROM uav-stage3-ros:local
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libglew-dev libglfw3-dev xvfb xauth mesa-utils \
+    && rm -rf /var/lib/apt/lists/*
+ENV ROS_DOMAIN_ID=13 LIBGL_ALWAYS_SOFTWARE=1
+USER 1000:1000
+ENTRYPOINT ["/bin/bash", "/lesson/stage3/run_super_race.sh"]

@@ -198,6 +198,14 @@ docker stats --no-stream uav-stage2-sitl
 
 教师课前准备：PC 安装 uv/Python 3.12+，在仓库根目录执行 `uv sync --extra stage2`；准备已验收 ROS 镜像 `osrf/ros:humble-desktop-jammy`（下载属于课前准备）。RGB/D 处理依赖在 PC，Gazebo Python 绑定使用仿真容器自带环境，ROS/RViz 在另一个容器内运行。运行前先按第 2 节启动标准机，等待 Baylands 加载完成并恢复播放。
 
+### 相机基线：Orbbec Gemini 2 几何近似
+
+依据 [官方产品页](https://www.orbbec.com/products/structured-light-camera/gemini-2/) 和 [官方规格书 v1.0](https://www.orbbec.com/wp-content/uploads/2023/04/ORBBEC_Datasheet_Gemini-2.pdf)（2026-10-10 核对），采用 RGB 640×360 / 30 Hz、水平 86°，深度 640×400 / 30 Hz、水平 91°，范围 0.15–10 m（官方最佳范围 0.2–5 m）。模式支持更高分辨率，课堂选择低分辨率以控制负载。
+
+Gazebo 针孔由水平视场和宽高比推导垂直视场：RGB 约 55.4°、深度约 64.9°；官方标称分别约 55°/66°，并非精确实机内参。机壳用 90×25×30 mm 盒体、98 g 质量，均匀盒体惯量近似，取消 OakD-Lite 网格。camera_link 相对 base_link 位于 `(0.17,0,0.025)` m，共用传感器原点再向前 0.016 m，坐标轴沿用 Gazebo +X 前、+Y 左、+Z 上；这不是 ROS optical frame，也不是已标定的 RGB/IR 外参。
+
+该实现提供理想 RGB 和几何深度，不模拟主动双目投影、匹配误差、畸变、日照失效或真实深度噪声；两路共光心是课程近似，仍不保证时间同步。官方适用环境为室内/半室外，Baylands 理想深度可见不代表硬件强光下可靠。实际安装、外参和改装飞行须复验；Orbbec SDK、USB 驱动和硬件未接入。修改后按第 4 节重启仿真，再启动两个展示入口。
+
 ### 文件与运行位置
 
 | 文件 | 运行位置与职责 |
@@ -219,7 +227,7 @@ docker stats --no-stream uav-stage2-sitl
 ./stage2/show_sensors.sh
 ```
 
-浏览器打开 <http://127.0.0.1:8090>，RGB 和 D 两图持续更新。RGB 为 640×360，深度为 640×480、单位米；默认深度色标 0.2–19.1 m。深度伪彩色 JPEG 仅用于展示，算法使用原始浮点深度。两路未做时间同步或 RGBD 光学对齐。
+浏览器打开 <http://127.0.0.1:8090>，RGB 和 D 两图持续更新。RGB 为 640×360，深度为 640×400、单位米；默认深度色标 0.15–10 m。深度伪彩色 JPEG 仅用于展示，算法使用原始浮点深度。两路未做时间同步或 RGBD 光学对齐。
 
 **PC 仓库根目录，终端 D**：
 
@@ -231,7 +239,7 @@ docker stats --no-stream uav-stage2-sitl
 
 | 图像/数据 | 来源 | 展示出口 |
 | --- | --- | --- |
-| RGB | 标准机 IMX214 相机 | WebUI RGB |
+| RGB | 标准机 Orbbec Gemini 2 近似 RGB 相机 | WebUI RGB |
 | D | `/depth_camera`，浮点米制深度 | WebUI 深度伪彩色 |
 | 点云 | `/mid360s/scan/points`，Gazebo 原生 GPU LiDAR | ROS `/stage2/mid360s/points` |
 | Voxel | 同帧有效雷达 XYZ，默认 0.2 m 格网 | ROS `/stage2/mid360s/voxels` |
@@ -308,3 +316,7 @@ docker restart uav-stage2-sitl
 ```
 
 该复制随容器删除而消失，正式流程仍使用两个只读挂载。历史诊断、具体版本及性能证据见 [Validation](Validation.md)；QGC 消息历史不等于当前故障，以本次实时状态为准。
+
+## 相机配置验证（2026-10-10）
+
+独立无界面 Gazebo 静态墙场景实测：RGB 640×360、深度 640×400，接收桥与 Web JPEG 尺寸正确，连续帧时间递增；深度 256000 有效像素、约 4.664 m，与已知墙面距离一致。SDF 校验及深度点云 640×400 连续两帧验证通过。Python/Bash 语法检查通过；未自动验收图形、改装飞行、Orbbec SDK 或真实硬件，先前展示确认对应改相机前版本。

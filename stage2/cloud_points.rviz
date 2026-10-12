@@ -41,8 +41,8 @@ Visualization Manager:
       Axis: X
       Use Fixed Frame: false
       Autocompute Value Bounds: false
-      Min Value: 0.2
-      Max Value: 19.1
+      Min Value: 0.15
+      Max Value: 10
       Decay Time: 0
       Alpha: 1
   Views:

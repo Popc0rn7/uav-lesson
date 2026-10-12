@@ -18,7 +18,7 @@ python=${STAGE2_PYTHON:-$script_dir/../.venv/bin/python}
 rgb=${STAGE2_RGB_TOPIC:-}
 if [[ -z $rgb ]]; then
   topics=$(docker exec "$container" gz topic -l)
-  mapfile -t candidates < <(printf '%s\n' "$topics" | sed -n '\|/sensor/IMX214/image$|p')
+  mapfile -t candidates < <(printf '%s\n' "$topics" | sed -n '\|/sensor/orbbec_rgb/image$|p')
   if (( ${#candidates[@]} != 1 )); then
     printf '无法唯一选择 RGB，请设置 STAGE2_RGB_TOPIC。话题：\n%s\n' "$topics" >&2; exit 1;
   fi

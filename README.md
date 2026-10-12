@@ -18,7 +18,7 @@ PC 运行 PX4 SITL + Gazebo Docker 仿真，以及 QGroundControl、GUI 和可�
 ## 当前可运行内容
 
 - Stage 1：ROS 常驻模型聊天链路，PC 入口位于 `stage1/`，板端文件位于 `stage1/robopi/`；上游运行产物和模型需课前获取，操作见 [Hands-on](docs/stage1/Hands-on.md)。
-- Stage 2：PC PX4/Gazebo 标准机 `x500_experiment`（RGBD＋MID-360S 规则扫描近似），QGC 操作、四图展示和排障见 [Hands-on](docs/stage2/Hands-on.md)。用户已确认展示可用，改装后的完整飞行仍待验收；历史证据见 [实测记录](docs/stage2/Validation.md)。
+- Stage 2：PC PX4/Gazebo 标准机 `x500_experiment`（Orbbec Gemini 2 RGBD＋MID-360S 几何近似），QGC 操作、四图展示和排障见 [Hands-on](docs/stage2/Hands-on.md)。用户已确认展示可用，改装后的完整飞行仍待验收；历史证据见 [实测记录](docs/stage2/Validation.md)。
 - Stage 3：Jev API 包装和文本决策示例；自主飞行 API、算法和 PC 聊天 GUI 尚未实现。
 
 ## Stage 2 标准机入口

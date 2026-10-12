@@ -56,8 +56,8 @@ def main():
     parser.add_argument('--source', default='http://127.0.0.1:8089')
     parser.add_argument('--port', type=int, default=8090)
     parser.add_argument('--fps', type=float, default=20)
-    parser.add_argument('--near', type=float, default=.2)
-    parser.add_argument('--far', type=float, default=19.1)
+    parser.add_argument('--near', type=float, default=.15)
+    parser.add_argument('--far', type=float, default=10.)
     args = parser.parse_args()
     if not (0 < args.fps <= 30 and 0 <= args.near < args.far and 0 < args.port < 65536):
         parser.error('帧率、深度范围或端口无效')

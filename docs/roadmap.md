@@ -53,7 +53,7 @@
 - [ ] 复现 GCOPTER 和 SUPER，并建立统一评测配置。
 - [x] SUPER 在 ROS 2 Humble Docker 与 PX4/Gazebo Docker 之间控制标准机完成空场景起飞、到点、降落；[步骤](stage3/Hands-on.md)与[实测](stage3/Validation.md)。密林避障、SUPER 上板和统一评测仍待完成。
 - [x] SUPER 自带 perfect_drone_sim 中等难度 corridor 在 Humble Docker 完成 100 m 往返，提供计时、速度、点云净空与可重置入口；[操作与边界](stage3/Hands-on.md)。
-- [x] SUPER 在 Gazebo 实体 corridor 完成高度受限的 2/5 m/s 冷启动往返；实体扫描、Gazebo/RViz 双窗口、碰撞正例及雷达/规划器/时钟故障后的自动降落均已实测；[步骤](stage3/Hands-on.md)与[证据](stage3/Validation.md)。实机 MID-360、上板和统一算法对照仍待完成；上述历史结果按各自传感器与定位配置区分。
+- [x] SUPER 在 Gazebo 实体 corridor 完成高度受限的 2/5 m/s 冷启动往返；实体扫描、旧版 Gazebo/RViz 双窗口、当前 PX4/GNSS 2 m/s 的 Gazebo＋双 RViz 三窗口、碰撞正例及雷达/规划器/时钟故障后的自动降落均已实测；[步骤](stage3/Hands-on.md)与[证据](stage3/Validation.md)。实机 MID-360、上板和统一算法对照仍待完成；上述历史结果按各自传感器与定位配置区分。
 - [ ] 复现目标识别与跟踪，确定模型和传感器接口。
 - [ ] 复现 CAT-ORA，提供队形任务接口与多机配置。
 - [ ] 复现 RACER，准备探索地图与模拟配送任务。

@@ -154,16 +154,41 @@ C++ 可调外参预处理构建通过；地面高度单元测试覆盖原安装�
 
 ## 2026-10-12 收束版本：FAST-LIO2 与 200 Hz 传播
 
-本节为当前交付配置；前文未接入 LIO 的描述属于各自历史配置。仅在当前 PC 验证，没有连接 RoboPi 或真实雷达，没有调用付费 API。
+本节记录 FAST-LIO 显式对照配置；当前默认 PX4/GNSS 配置另见文末。仅在当前 PC 验证，没有连接 RoboPi 或真实雷达，没有调用付费 API。
 
-默认 corridor 使用 FAST-LIO2、可选墙面标记开启、安装高度 0.30 m。Gazebo 载体为 1800×64 / 60 Hz，垂直 −7°～52°，按 SUPER/MARSIM 角度轨迹组成约 30 Hz Livox CustomMsg；分片时间偏移是真实查询时刻相对区间起点的 ns。约 17～20 ms 时间粒度、固定反射率等仍是仿真近似。FAST-LIO ROS2 固定 a4743b095409588842a5b30ddfa27e29d2f99164；源码补丁与接口见 Hands-on。点云校正约 30 Hz，独立滤波副本按 IMU 预测约 200 Hz。实际 PX4 参数读回：EKF2_GPS_CTRL=0、EKF2_BARO_CTRL=1、EKF2_EV_CTRL=15、EKF2_HGT_REF=3、EKF2_EV_DELAY=0。规划定位只来自 LiDAR/IMU；真值只用于评测。
+本节 FAST-LIO 对照使用可选墙面标记、安装高度 0.30 m。Gazebo 载体为 1800×64 / 60 Hz，垂直 −7°～52°，按 SUPER/MARSIM 角度轨迹组成约 30 Hz Livox CustomMsg；分片时间偏移是真实查询时刻相对区间起点的 ns。约 17～20 ms 时间粒度、固定反射率等仍是仿真近似。FAST-LIO ROS2 固定 a4743b095409588842a5b30ddfa27e29d2f99164；源码补丁与接口见 Hands-on。点云校正约 30 Hz，独立滤波副本按 IMU 预测约 200 Hz。实际 PX4 参数读回：EKF2_GPS_CTRL=0、EKF2_BARO_CTRL=1、EKF2_EV_CTRL=15、EKF2_HGT_REF=3、EKF2_EV_DELAY=0。规划定位只来自 LiDAR/IMU；真值只用于评测。
 
 双窗口冷启动 2 m/s 往返 passed=true：去程 70.061 s、返程 78.097 s；LIO 终点误差 0.0440 / 0.0304 m，实际终点误差 0.2219 / 0.0920 m。最小中心净空 1.0933 m，实际高度 1.9154～2.0059 m，峰值速度 2.1887 m/s；无障碍接触，正常降落解除解锁。评测接收时刻的最大位姿/真值差 0.2117 m，并非同步定位精度专项验收。证据在 PC /tmp/stage3-fastlio/final-200/{result.json,trajectory.csv,logs/}，原始日志与轨迹不提交 Git。
 
 扫描检查分别通过：56.8037 / 60 Hz、平均实时率 0.9309、最大帧间隔 0.1122 s；另一窗口 57.0808 / 60 Hz、平均实时率 0.9568。第二窗口采样时飞行已结束，不能描述为完整返程性能测试。证据同目录 scan-takeoff.json、scan-landed.json。启动采样窗口测得传播状态 197.7 Hz、课程里程计 198.1 Hz、配准点云 30.0 Hz、IMU 198.3 Hz（均按仿真时钟计）；时间戳无重复或倒退，采样 Livox 点偏移为 16～32 ms，timebase 与 header 一致。当前 PC 四容器资源快照约 2.9 / 2.6 / 1.3 / 0.2 个 CPU 核、958 / 588 / 661 / 75 MiB 内存，非峰值预算。
 
-独立冷启动雷达失流测试 passed=true：飞行进入轨迹后等待 1 s，SIGSTOP 时间分片雷达进程；0.5193 s 内控制桥请求降落，随后恢复雷达，正常解除解锁、无接触、最终高度 0.2270 m。报告在该测试 ROS 容器 /tmp/stage3-corridor/fault-lidar.json。这只证明失流响应及恢复数据后的降落，不代表持续关闭雷达直至落地的后备专项测试；后者尚未实施。
+独立冷启动雷达失流测试 passed=true：飞行进入轨迹后等待 1 s，SIGSTOP 时间分片雷达进程；0.5193 s 内控制桥请求降落，随后恢复雷达，正常解除解锁、无接触、最终高度 0.2270 m。报告在该测试 ROS 容器 /tmp/stage3-corridor/fault-lidar.json。该轮只证明失流响应及恢复数据后的降落；持续关闭雷达直到落地的独立补测见下文。
 
 开发失败轮次不计入通过：初始化使用近零重力、初帧姿态抵消导致地图倾斜、首组零偏移点未覆盖去畸变边界，以及原赛道纵向漂移均曾导致失败。另一次低分辨率 / 200 Hz 开发配置失流后发生仿真障碍接触，落地仍保持解锁；确认本任务 SITL 落地静止后，使用容器内 commander 强制解除解锁恢复。最终版本恢复较细水平网格、修正分片时间边界、仅对齐航向、增加有效匹配门槛，并保留原生气压高度。没有放宽终点、高度、接触或净空验收门槛。
 
-当前只完成一次最终配置的完整冷启动往返与一次上述失流测试。原始几何纯 LIO、LIO 5 m/s、持续失流降落、多轮成功率、真实 MID-360 驱动/录包、板端迁移与 GCOPTER 同场景比较仍未验收。Python 几何/视场检查 6 项、C++ 扫描轨迹 CTest 1/1 已通过；静态检查不替代这些未验收项。
+当前只完成一次最终配置的完整冷启动往返与一次上述失流测试。原始几何纯 LIO、LIO 5 m/s、多轮成功率、真实 MID-360 驱动/录包、板端迁移与 GCOPTER 同场景比较仍未验收。Python 几何/视场检查 6 项、C++ 扫描轨迹 CTest 1/1 已通过；静态检查不替代这些未验收项。
+
+
+持续雷达失流补测（2026-10-12）：相同最终 FAST-LIO、标记开启、2 m/s 配置，独立冷启动。进入跟踪后等待 1 s，再 SIGSTOP 时间分片雷达节点，并保持停止直到 PX4 解除解锁。passed=true，0.5198 s 内请求降落；落地时传播里程计已静默 8.0668 s，无障碍接触，最终实际高度 0.2270 m。整个降落阶段没有恢复雷达或注入新的 LIO 位姿，没有强制解除解锁。该测试验证了传播停止与飞控气压后备；结束后清理逻辑才恢复雷达进程。证据在 PC /tmp/stage3-fastlio/fault-persistent/{result.json,logs/}。先前恢复雷达后降落的报告独立保存在 /tmp/stage3-fastlio/fault-recovered/result.json，不覆盖历史条件。
+
+## 2026-10-12 无墙面标记对照与回归
+
+针对原走廊 `--wall-landmarks off` 做了独立冷启动 2 m/s 试验，检查可否不依赖额外墙面实体。原整度方位扫描的无标记轮次失败：最大定位与真值差 13.58 m，随后发生接触及仿真数值失稳；仅在确认本任务 PX4 已解除解锁后重置。证据 `/tmp/stage3-fastlio/no-landmarks-current/`。将仿真雷达的 MARSIM 方位波形改为连续角度以覆盖 1800 列后，另一轮无标记试验无接触且正常降落，但去程未达到 0.3 m 真值到点门槛，最大定位与真值差约 1.21 m；证据 `/tmp/stage3-fastlio/no-landmarks-continuous/`。连续角度是本课程的仿真采样实验，不等同于原 MARSIM 的整度取整或真实 MID-360 出厂扫描标定。
+
+进一步依据仿真明确静止启动和前 400 条 IMU 样本收紧 FAST-LIO 初始化协方差，不使用 Gazebo 真值作定位输入。连续角度＋静止先验组合的无标记轮次：去程真值终点误差 0.1047 m；回程规划器报告到点时，真值仍距起点约 3 m，最终超时，passed=false。最大定位与真值差 3.5603 m，最小中心净空 1.0832 m，无接触，正常降落解除解锁。证据 `/tmp/stage3-fastlio/no-landmarks-stationary-prior/{result-2.json,trajectory-2.csv}`。因此当前不能宣称原走廊的纯 LiDAR/IMU 无标记完整往返通过；无标记纵向约束仍是待解决问题。
+
+相同新代码、标记开启的独立回归 passed=true：去程与回程真值终点误差 0.1676 / 0.0826 m，最小中心净空 1.1021 m，最大定位与真值差 0.2489 m，无接触，自动降落解除解锁。证据 `/tmp/stage3-fastlio/marker-regression-continuous/{result-2.json,trajectory-2.csv}`。这只验证新组合没有破坏有标记 demo，不能单独归因于角度采样或初始化先验。
+
+目前的 1.95 m 是课程控制桥为该走廊选择的固定飞行层，不是用户指定的 PX4 限制。PX4 Offboard 接口可接收三维位置、速度、加速度；当前桥将 SUPER 的 Z 参考投影到 1.95 m，并令 Z 速度/加速度为零，以固定飞行层核对水平避障。三维轨迹执行及含悬空障碍场景尚未验收。
+
+## 2026-10-12 PX4/GNSS 默认演示与 ROG 地图展示
+
+走廊默认改为 `localization=px4`、`wall-landmarks=false`，不启动 FAST-LIO；PX4/GNSS 提供估计位姿，仿真 MID-360 回波经预过滤和坐标变换后仍输入 SUPER/ROG-Map。运行中实际读回 `EKF2_GPS_CTRL=5`、`EKF2_EV_CTRL=0`、`EKF2_BARO_CTRL=1`。RViz 将 `/cloud_registered` 实时回波、`/rog_map/occ` 0.2 m 占据体素、`/rog_map/inf_occ` 安全膨胀区域分层显示。后两者是同一 ROG-Map 的两种输出，不是两个建图算法。独立订阅实际收到占据图 1268 点、膨胀图 24099 点；这是一次静止视野快照，不代表性能上限。实际 RViz 窗口截图已检查：青色方块墙体/立柱与淡橙色膨胀区域可区分，截图时显示约 19 fps；ROS/SITL/RViz 的资源快照分别约 2.24/1.67/0.31 核、759/468/108 MiB，非峰值。
+
+双窗口、无附加标记的 2 m/s 冷启动往返 passed=true：去程和回程实际终点误差 0.05965 / 0.05835 m，时间 63.230 / 63.110 s；最大定位与真值差 0.11253 m，最小中心净空 1.02069 m，实际高度 1.8611～2.0435 m，峰值速度 2.1585 m/s。无障碍接触，自动降落解除解锁。起飞前 `inspect ready=true`，约 30.23 Hz 雷达帧、100.07 Hz PX4 位姿；地图图层由 ROG ROS2 publisher 在订阅者存在时实际发布。证据在 PC `/tmp/stage3-px4-rogmap-demo/{result-2.json,trajectory-2.csv,rviz-voxels.png}`。图形窗口仍是课程仿真效果，不代表真实 GNSS 遮挡环境中的定位可用性。
+
+## 2026-10-12 三窗口展示拆分
+
+用户将叠加视图改为 Gazebo＋两个独立 RViz：`super_gazebo_cloud.rviz` 只订阅 `/cloud_registered`，按高度着色展示当前点云；`super_gazebo_map.rviz` 只订阅 ROG 的 `/rog_map/occ` 与 `/rog_map/inf_occ`，用青色方块和淡橙色点展示积累占据体素与安全膨胀区域。两窗仍显示机器人和飞行路径。对应 GUI 容器为 `uav-stage3-gazebo-view`、`uav-stage3-rviz-view`、`uav-stage3-rviz-map-view`；`view-close` / `down` 会清理全部三个。实际截图逐一核查，点云与体素图不再叠在同一 RViz 窗口；两个 RViz 静止画面约 19～20 fps。窗口在当前双屏桌面分别放置，不代表单屏可同时完整显示。飞行中的资源快照：点云 RViz 0.3345 核 / 75.58 MiB、地图 RViz 0.3289 核 / 92.81 MiB、Gazebo GUI 1.0354 核 / 522 MiB；均非峰值。
+
+随后按默认 PX4/GNSS、无标记、2 m/s 独立冷启动并保持三窗口开启，完整往返 passed=true：去程 / 回程 65.452 / 63.712 s，真值终点误差 0.15737 / 0.10808 m；最小中心净空 0.95282 m，实际高度 1.6087～1.9586 m，峰值速度 2.1703 m/s，无接触，自动降落解除解锁，末次实时率约 1.0003。证据 `/tmp/stage3-px4-three-view/{result-2.json,trajectory-2.csv,cloud-rviz.png,map-rviz.png,gazebo.png}`。飞行验收后将两个 RViz 的路径线宽从 0.30 m 缩到 0.08 m，重新打开窗口并分别截图检查，未因此重复飞行；这只改变渲染，不改变 ROG 地图或控制输入。

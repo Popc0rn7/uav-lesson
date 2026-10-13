@@ -71,6 +71,19 @@ def main():
   if (diagnostic_frames++ < 10) std::cerr << "LIO propagation begin/end/imu/previous/gravity: " << pcl_beg_time << " " << pcl_end_time << " " << imu_beg_time << " " << imu_end_time << " " << last_lidar_end_time_ << " " << mean_acc.transpose() << std::endl;
   /*** sort point clouds by offset time ***/''')
         imu_source.write_text(imu_code)
+    if '// Stage3: stationary simulation initialization covariance' not in imu_code:
+        anchor='  init_P.setIdentity();'
+        if imu_code.count(anchor)!=1:raise SystemExit('Pinned FAST-LIO covariance anchor changed')
+        imu_code=imu_code.replace(anchor,anchor+'''
+  // Stage3: stationary simulation initialization covariance.
+  // Simulation-only prior after 400 stationary IMU samples; no truth feedback.
+  init_P.block<3,3>(0,0) *= 1e-4;
+  init_P.block<3,3>(3,3) *= 1e-6;
+  init_P.block<3,3>(12,12) *= 1e-4;''')
+        imu_code=imu_code.replace('init_P(15,15) = init_P(16,16) = init_P(17,17) = 0.0001;', 'init_P(15,15) = init_P(16,16) = init_P(17,17) = 1e-7;')
+        imu_code=imu_code.replace('init_P(18,18) = init_P(19,19) = init_P(20,20) = 0.001;', 'init_P(18,18) = init_P(19,19) = init_P(20,20) = 1e-6;')
+        imu_code=imu_code.replace('init_P(21,21) = init_P(22,22) = 0.00001;', 'init_P(21,21) = init_P(22,22) = 1e-7;')
+        imu_source.write_text(imu_code)
     patch_forward(WS/'src/FAST_LIO')
     # FAST-LIO links the official message types. No SDK/hardware driver is needed
     # to consume simulated CustomMsg; keep the original schemas and license.

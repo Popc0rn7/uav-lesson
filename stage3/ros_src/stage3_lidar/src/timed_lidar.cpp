@@ -40,7 +40,7 @@ public:
     // The ray-cast group occurs at 'now', so its offset is strictly positive.
     // FAST-LIO's backward deskew excludes points with exactly zero offset.
     if(base_<0)base_=previous_;
-    const auto cells=mid360_cells(previous_*1e-9,now*1e-9,m.width(),m.height());
+    const auto cells=mid360_cells(previous_*1e-9,now*1e-9,m.width(),m.height(),false);
     previous_=now;
     for(auto cell:cells) {
       const auto ptr=m.data().data()+(cell/m.width())*m.row_step()+(cell%m.width())*m.point_step();

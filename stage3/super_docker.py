@@ -28,7 +28,7 @@ def main():
     parser.add_argument('action',choices=['prepare','build','lio-build','up','inspect','scan','verify','fault','contact-check','view','view-close','down'])
     parser.add_argument('--case',choices=['lidar','planner','clock'])
     parser.add_argument('--scene',choices=['default','corridor'])
-    parser.add_argument('--localization',choices=['fastlio','px4'],help='走廊默认 FAST-LIO2；px4 保留旧对照')
+    parser.add_argument('--localization',choices=['fastlio','px4'],help='走廊默认 PX4/GNSS；fastlio 为显式对照')
     parser.add_argument('--wall-landmarks',choices=['on','off'],help='可选实体墙面标记；FAST-LIO 默认 on，PX4 对照默认 off')
     parser.add_argument('--lidar',choices=['mid360','super360','mid360s'],default='mid360')
     parser.add_argument('--speed',type=int,choices=[2,5])
@@ -76,7 +76,7 @@ def main():
     elif args.action=='up':
         args.scene=args.scene or 'default'
         args.speed=args.speed or 2
-        args.localization=args.localization or ('fastlio' if args.scene=='corridor' and args.lidar=='mid360' else 'px4')
+        args.localization=args.localization or 'px4'
         use_lio=args.localization=='fastlio'
         args.wall_landmarks=args.wall_landmarks or ('on' if use_lio else 'off')
         ros_image='uav-stage3-lio:local' if use_lio else IMAGE

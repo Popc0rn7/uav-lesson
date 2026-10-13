@@ -1,6 +1,6 @@
 # Stage 3：SUPER Humble 仿真 demo
 
-Stage 3 提供两个入口：perfect_drone_sim 用于算法竞速演示，Gazebo 实体 corridor 用于实际传感器扫描、PX4 动力学与双窗口展示。各入口的已通过范围见 Validation。
+Stage 3 提供两个入口：perfect_drone_sim 用于算法竞速演示，Gazebo 实体 corridor 用于实际传感器扫描、PX4 动力学与 Gazebo＋双 RViz 展示。各入口的已通过范围见 Validation。
 
 PX4/Gazebo 入口在 PC 运行两个 Docker：ROS 2 Humble 内运行 SUPER、ROG-Map、雷达坐标适配和 PX4 Offboard 桥；另一个容器运行 PX4/Gazebo 与 Stage 2 标准机 `x500_experiment`。不需要 ProjectAirSim、MAVROS 或原机 Jazzy。当前为单机、静态场景、低速实验，板端迁移另行进行。
 
@@ -152,7 +152,7 @@ python3 stage3/super_race.py view
 
 课程规划配置为 `stage3/super_race.yaml`，从上游 medium/10 m/s quiet 配置派生：地图垂直范围 6→10 m、虚拟天花板 5→6 m；避免膨胀与机器人半径裁剪使搜索种子处在走廊边界外。场景没有实体顶棚，允许三维绕障；不能将完成任务等同于全程水平侧绕立柱。实际高度范围在结果中记录。
 
-## Gazebo 实体走廊与双窗口（PC）
+## Gazebo 实体走廊与三窗口（PC）
 
 此入口将中等 corridor 的墙、18 根立柱和 9 个灌木实体化；地面、障碍均有碰撞几何。走廊长 100 m、净宽 6 m，侧墙高 4 m；立柱半径 0.1 m、高 2.5 m，灌木用半径 0.5 m、高 0.35 m 的圆柱近似。坐标为 ENU，原场景 y∈[-50,50] 平移为 [0,100]。原 `perfect_drone_sim` 入口继续保留。
 
@@ -162,7 +162,6 @@ PC，在仓库根目录执行：
 
 ```bash
 python3 stage3/super_docker.py build
-python3 stage3/super_docker.py lio-build
 python3 stage3/super_docker.py up --scene corridor --speed 2
 python3 stage3/super_docker.py inspect
 python3 stage3/super_docker.py view
@@ -170,25 +169,34 @@ python3 stage3/super_docker.py scan
 python3 stage3/super_docker.py verify
 ```
 
-预期画面：Gazebo 显示实体飞机、墙、橙色立柱与绿色灌木；RViz 显示运行时雷达点云、ROG 占据地图、规划轨迹、备用轨迹与实际飞行路径，并跟随飞机。`view` 只连接已有世界；两个显示容器可以独立关闭。需要有效的 DISPLAY 与 XAUTHORITY；不修改宿主 xhost 权限。
+预期打开三个窗口：Gazebo 显示实体飞机和赛道；点云 RViz 保留之前按高度着色的实时雷达回波、飞机和路径；地图 RViz 显示青色 ROG 占据体素（0.2 m）、淡橙色安全膨胀区域、飞机和路径。两个 RViz 各自跟随飞机。ROG-Map 本身就是体素占据地图：内部还区分空闲与未知区域；`/rog_map/occ` 只输出被判为占据的体素中心，`/rog_map/inf_occ` 输出规划用膨胀体素中心。RViz 将这些中心画成方块或淡色点；两个话题来自同一地图，不是两套独立建图算法。实时回波 `/cloud_registered` 每帧更新，已观察到的障碍在 ROG 局部地图中积累；地图随飞机滑动，只保留附近区域。两个 RViz 左边缘的箭头都可展开 Displays 面板；点云窗口使用 `stage3/super_gazebo_cloud.rviz`，只订阅 `/cloud_registered`；地图窗口使用 `stage3/super_gazebo_map.rviz`，只订阅 `/rog_map/occ` 和 `/rog_map/inf_occ`。这使“当前扫描”和“已积累地图”不会叠在同一画面。`view` 只连接已有世界；三个显示容器会由 `view-close` 一并关闭。需要有效的 DISPLAY 与 XAUTHORITY；不修改宿主 xhost 权限。
 
-`--localization px4` 对照中的 `--lidar mid360` 为 MID-360 视场与标称点率近似：水平 360°、垂直 −7°～52°、30 Hz 点云、标称 20 万角度采样/秒、最大距离 70 m。参数依据 [Livox 官方规格](https://www.livoxtech.com/cn/mid-360/specs)。现在以 900×148 的 GPU 角度栅格查询 Gazebo 实体回波，再按 SUPER/MARSIM 的 MID_360 轨迹公式随仿真时间选择方向。该栅格是内部查询载体，不能把其 133,200 射线/帧当作输出点数。角度重复会合并，空回波、距离与体素过滤也会减少输出点；没有逐点真实采样时间、运动畸变、反射率相关量程或实机噪声模型，不能称为 MID-360 实机复现。`--lidar super360` 保留旧的 178° GENERAL_360 高密度对照；`--lidar mid360s` 使用 Stage 2 的 512×16 / 40 m 近似，尚未重新验收。不同传感器配置必须分别验证，不能混用证据。
+PC：`up`、`inspect` 显示 ready=true 且世界点云持续到达后，可检查地图确实发布（`view` 开启时也会订阅地图）：
+
+```bash
+docker exec uav-stage3-ros bash -lc 'source /opt/ros/humble/setup.bash; timeout 10 ros2 topic echo /rog_map/occ sensor_msgs/msg/PointCloud2 --once --field width --no-daemon'
+docker exec uav-stage3-ros bash -lc 'source /opt/ros/humble/setup.bash; timeout 10 ros2 topic echo /rog_map/inf_occ sensor_msgs/msg/PointCloud2 --once --field width --no-daemon'
+```
+
+两条命令都应输出大于零的点数并在 10 秒内退出。若世界点云有数据但地图为空，先检查 `/tmp/stage3-node-logs/planner.log` 中 ROG 的点云/位姿超时提示，以及 RViz 的 Fixed Frame 是否为 `world`；不要用延长 RViz 点云保留时间冒充地图积累。
+
+默认 PX4/GNSS 定位模式中的 `--lidar mid360` 为 MID-360 视场与标称点率近似：水平 360°、垂直 −7°～52°、30 Hz 点云、标称 20 万角度采样/秒、最大距离 70 m。参数依据 [Livox 官方规格](https://www.livoxtech.com/cn/mid-360/specs)。现在以 900×148 的 GPU 角度栅格查询 Gazebo 实体回波，再按 SUPER/MARSIM 的 MID_360 轨迹公式随仿真时间选择方向。该栅格是内部查询载体，不能把其 133,200 射线/帧当作输出点数。角度重复会合并，空回波、距离与体素过滤也会减少输出点；没有逐点真实采样时间、运动畸变、反射率相关量程或实机噪声模型，不能称为 MID-360 实机复现。`--lidar super360` 保留旧的 178° GENERAL_360 高密度对照；`--lidar mid360s` 使用 Stage 2 的 512×16 / 40 m 近似，尚未重新验收。不同传感器配置必须分别验证，不能混用证据。
 
 两档课程配置使用 10 m 规划前视、6 m 滚动距离、1.0 m 走廊机器人半径与 1.2 m 栅格膨胀，加速度规划上限均为 2 m/s²；射线空闲更新概率 `p_miss=0.4`，用于更快清除往返时定位偏差留下的占据残影。PX4 水平位置增益 `MPC_XY_P=1.2`。2/5 m/s 均为规划速度上限，实际速度在验收结果中记录。两档除速度上限外使用相同参数。这些是本实体赛道的仿真参数，原竞速配置不变。源码头部声明 LGPL-3.0-or-later，而部分 package.xml 声明 BSD，发布课程镜像前需核实上游许可证差异；当前通过本地源码工作副本准备运行产物。
 
 此 PX4 1.18 基线已将 GPS 延迟参数迁移为 `SENS_GPS0_DELAY` / `SENS_GPS1_DELAY`，见 [官方版本说明](https://docs.px4.io/v1.18/en/releases/1.18)。Gazebo GNSS 使用当前仿真采样，课程容器显式设两者为 0 ms；默认 110 ms 会使测量时间戳偏移，在高速飞行时影响点云配准。换 PX4 版本时先核实参数及实际 `vehicle_gps_position.timestamp_sample`，不能套用已移除的 `EKF2_GPS_DELAY`，也不能将此无延迟设置直接用于真实 GNSS。
 
-显式 `--localization px4` 对照模式使用 PX4 原生气压高度：`EKF2_BARO_CTRL=1`、`EKF2_HGT_REF=0`、`EKF2_EV_CTRL=0`、`EKF2_GPS_CTRL=5`（水平 GNSS 与速度），不启动雷达地面拟合或注入视觉高度。正装雷达最向下仅 −7°，不能提供原先依赖的近地平面观测。控制桥仍检查 PX4 本地高度、位置、速度健康以及点云/里程计/时钟新鲜度；只是该模式不等待不存在的雷达高度消息。PX4 定位仍来自 SITL 传感器融合，尚未接入真正的 LIO。高度融合设置依据 [PX4 EKF 文档](https://docs.px4.io/v1.18/en/advanced_config/tuning_the_ecl_ekf)。
+默认 `--localization px4` 模式使用 PX4 原生气压高度：`EKF2_BARO_CTRL=1`、`EKF2_HGT_REF=0`、`EKF2_EV_CTRL=0`、`EKF2_GPS_CTRL=5`（水平 GNSS 与速度），不启动雷达地面拟合或注入视觉高度。正装雷达最向下仅 −7°，不能提供原先依赖的近地平面观测。控制桥仍检查 PX4 本地高度、位置、速度健康以及点云/里程计/时钟新鲜度；只是该模式不等待不存在的雷达高度消息。PX4 定位仍来自 SITL 传感器融合，尚未接入真正的 LIO。高度融合设置依据 [PX4 EKF 文档](https://docs.px4.io/v1.18/en/advanced_config/tuning_the_ecl_ekf)。
 
 PC 可独立运行高度拟合几何检查：`docker exec -w /lesson/stage3 uav-stage3-ros python3 -m unittest discover -s tests -v`。它不替代真实扫描与飞行验收。
 
-PX4 对照的数据链为 Gazebo GPU 实体扫描 → Gazebo transport C++ 距离过滤/10 cm 体素 → ROS 雷达帧 → PX4 估计姿态与安装外参转换 → `/cloud_registered` → ROG-Map/SUPER → PX4 Offboard。规划器没有读取 PCD 或 Gazebo 真值。旧 `--lidar super360` 平坦走廊模式增加雷达地面平面拟合：48 次确定性 RANSAC、最多 1200 点的候选样本、2.5 cm 内点门限，要求地面占候选点至少 45%，再以 SVD 精化。安装偏移修正后得到机体离地高度，通过 `/fmu/in/vehicle_visual_odometry` 的 NED Z 交给 PX4；不融合该消息的 XY、速度或姿态。设置 `EKF2_EV_CTRL=2`、`EKF2_HGT_REF=3`、`EKF2_EVP_NOISE=0.05`、`EKF2_GPS_P_NOISE=0.05`、`EKF2_BARO_CTRL=0`，GNSS 继续提供水平定位与速度。接口配置依据 [PX4 EKF 文档](https://docs.px4.io/v1.18/en/advanced_config/tuning_the_ecl_ekf)。这仅是平坦地面的高度辅助，不是完整 LIO；坡地、台阶、地面被遮挡及实际 MID-360 扫描均需另行验证。高度拟合失败或超过 0.5 s 未更新时请求降落，参数不能直接当作板端基线。`world` 为课程 ENU，`base_link` 为机体 FLU，`mid360s_sensor` 的 base 外参 z=0.135 m；PX4 输入输出为 NED/FRD。里程计以 PX4 sample 时间戳发布；雷达保留 Gazebo 时间戳，姿态配对误差最多 50 ms。里程计 twist 沿用 SUPER 接口的世界坐标速度约定。
+默认 PX4/GNSS 数据链为 Gazebo GPU 实体扫描 → Gazebo transport C++ 距离过滤/10 cm 体素 → ROS 雷达帧 → PX4 估计姿态与安装外参转换 → `/cloud_registered` → ROG-Map/SUPER → PX4 Offboard。规划器没有读取 PCD 或 Gazebo 真值。旧 `--lidar super360` 平坦走廊模式增加雷达地面平面拟合：48 次确定性 RANSAC、最多 1200 点的候选样本、2.5 cm 内点门限，要求地面占候选点至少 45%，再以 SVD 精化。安装偏移修正后得到机体离地高度，通过 `/fmu/in/vehicle_visual_odometry` 的 NED Z 交给 PX4；不融合该消息的 XY、速度或姿态。设置 `EKF2_EV_CTRL=2`、`EKF2_HGT_REF=3`、`EKF2_EVP_NOISE=0.05`、`EKF2_GPS_P_NOISE=0.05`、`EKF2_BARO_CTRL=0`，GNSS 继续提供水平定位与速度。接口配置依据 [PX4 EKF 文档](https://docs.px4.io/v1.18/en/advanced_config/tuning_the_ecl_ekf)。这仅是平坦地面的高度辅助，不是完整 LIO；坡地、台阶、地面被遮挡及实际 MID-360 扫描均需另行验证。高度拟合失败或超过 0.5 s 未更新时请求降落，参数不能直接当作板端基线。`world` 为课程 ENU，`base_link` 为机体 FLU，`mid360s_sensor` 的 base 外参 z=0.135 m；PX4 输入输出为 NED/FRD。里程计以 PX4 sample 时间戳发布；雷达保留 Gazebo 时间戳，姿态配对误差最多 50 ms。里程计 twist 沿用 SUPER 接口的世界坐标速度约定。
 
-`verify` 等待控制状态 `idle: local_ready` 与点云，然后等待估计器静止收敛，起飞到 1.95 m，飞到 `(0,100,1.95)` 并返回 `(0,0,1.95)`，最后降落并解除解锁。每端所选定位输出与 Gazebo 真值位置误差均 <0.3 m、速度均 <0.3 m/s 连续 2 s；Gazebo 实际机体高度必须为 1.3–2.2 m，中心到实体边界净空至少 0.35 m，无障碍接触。参考指令还有范围、速度、加速度与新鲜度检查；数据或规划超时请求降落。真值 HTTP 8096 仅供验收。该实体赛道的立柱和侧墙在飞行层具有相同水平截面，控制桥执行 SUPER 的 XY 位置/速度/加速度，并独立保持 1.95 m 高度（Z 速度与加速度参考为零）；原始规划指令仍校验范围、动态限制和新鲜度。此投影仅适用于本赛道，不能直接用于有悬空障碍或分层通道的场景。RViz 的 SUPER/备用轨迹是规划辅助轨迹，橙色实际路径反映真实水平飞行；最终执行参考另发布在 `/stage3/uav1/reference`。
+`verify` 等待控制状态 `idle: local_ready` 与点云，然后等待估计器静止收敛，起飞到 1.95 m，飞到 `(0,100,1.95)` 并返回 `(0,0,1.95)`，最后降落并解除解锁。每端所选定位输出与 Gazebo 真值位置误差均 <0.3 m、速度均 <0.3 m/s 连续 2 s；Gazebo 实际机体高度必须为 1.3–2.2 m，中心到实体边界净空至少 0.35 m，无障碍接触。参考指令还有范围、速度、加速度与新鲜度检查；数据或规划超时请求降落。真值 HTTP 8096 仅供验收。1.95 m 是课程为本走廊选择的固定飞行层，不是 PX4 的能力限制；PX4 Offboard 接口支持三维位置、速度、加速度。该实体赛道的立柱和侧墙在飞行层具有相同水平截面，当前控制桥执行 SUPER 的 XY 位置/速度/加速度，并独立保持 1.95 m 高度（Z 速度与加速度参考为零）；原始规划指令仍校验范围、动态限制和新鲜度。此投影仅适用于本赛道，不能直接用于有悬空障碍或分层通道的场景。RViz 的 SUPER/备用轨迹是规划辅助轨迹，橙色实际路径反映真实水平飞行；最终执行参考另发布在 `/stage3/uav1/reference`。
 
 通过条件为 JSON 中 `passed=true`，不能仅凭看到飞机运动认定通过。ROS Docker 中结果为 `/tmp/stage3-corridor/result-2.json`，逐帧记录为 `trajectory-2.csv`；PC 扫描结果为 `/tmp/stage3-gazebo-scan.json`。扫描检查持续 60 s，要求达到启动配置标称扫描率的 90%（FAST-LIO 查询载体 ≥54 Hz；PX4 MID-360 对照 ≥27 Hz；旧对照 ≥9 Hz）、平均实时率 ≥0.8、最大帧间隔 ≤0.5 s。检查期间不要重启仿真。
 
-旧 PX4 对照的 2 m/s 验收完成后，在 PC 冷启动已验证的 5 m/s 配置（FAST-LIO 5 档尚未验收）：
+默认 PX4/GNSS 2 m/s 验收完成后，在 PC 冷启动已验证的 5 m/s 配置（FAST-LIO 5 档尚未验收）：
 
 ```bash
 python3 stage3/super_docker.py down
@@ -205,7 +213,7 @@ python3 stage3/super_docker.py verify
 docker exec -e ROS_LOCALHOST_ONLY=0 uav-stage3-ros bash -lc 'source /opt/ros/humble/setup.bash; ros2 topic pub --once /stage3/uav1/command std_msgs/msg/String "{data: land}"'
 ```
 
-故障检查各用新的冷启动 2 m/s 实例：`fault --case lidar`、`--case planner`、`--case clock`。工具在起飞进入跟踪后暂停本任务雷达/规划进程或仿真时钟，要求 3 s 内请求降落；随后恢复进程或时钟并等待解除解锁。结果在 ROS Docker 的 `/tmp/stage3-corridor/fault-*.json`。`contact-check` 只能在解除解锁时执行，会在侧墙内生成临时碰撞探针，要求接触传感器收到事件，随后删除探针；之后必须冷启动，避免接触记录污染飞行验收。
+故障检查各用新的冷启动 2 m/s 实例：`fault --case lidar`、`--case planner`、`--case clock`。工具在起飞进入跟踪后暂停本任务雷达/规划进程或仿真时钟，要求 3 s 内请求降落。FAST-LIO 的 lidar 案例保持雷达停止直到落地解除解锁，并检查传播里程计停止输出，用于验证无外部定位数据时的气压降落后备；结束后才恢复雷达进程。其他案例恢复进程或时钟后等待解除解锁。结果在 ROS Docker 的 `/tmp/stage3-corridor/fault-*.json`。`contact-check` 只能在解除解锁时执行，会在侧墙内生成临时碰撞探针，要求接触传感器收到事件，随后删除探针；之后必须冷启动，避免接触记录污染飞行验收。
 
 若失败试飞碰撞后倒在地面，PX4 可能无法确认落地，`down` 会继续拒绝删除。保留失败报告，用 Gazebo 与真值监测确认本任务虚拟飞机已经倒地静止；教师可在 PC 对这个 SITL 容器执行 `docker exec uav-stage3-sitl /opt/px4-gazebo/bin/px4-commander disarm -f` 后再 `down`。这是已发生的仿真碰撞恢复步骤，不计为自动降落通过，也不用于实体无人机。
 
@@ -257,20 +265,20 @@ ROS Docker：`/stage3/uav1/imu` 是计划供 LIO 使用的原始测量接口（�
 
 ## FAST-LIO2 定位链路（PC / ROS Docker）
 
-走廊默认使用 `--localization fastlio`，并开启可选墙面立体标记。`--wall-landmarks off` 保留原赛道，纯 LIO 在该对照中曾出现纵向漂移，尚未通过完整往返。教师在 `build` 后执行一次 `lio-build`：准备固定版本源码、构建 `uav-stage3-lio:local`、Livox 消息、FAST-LIO2 和时间分片雷达节点。依赖 ROS 2 Humble、PCL ROS 与 Gazebo transport 13 / msgs 10；成功判据是所有包构建完成、命令退出 0。源代码与编译产物放在忽略提交的 thirdparty 中。已有实例必须落地后 `down` 再切换定位方式。
+FAST-LIO2 是显式定位对照，需要 `--localization fastlio`；这时默认开启可选墙面立体标记。`--wall-landmarks off` 保留原赛道，纯 LIO 在该对照中曾出现纵向漂移，尚未通过完整往返。教师在 `build` 后执行一次 `lio-build`：准备固定版本源码、构建 `uav-stage3-lio:local`、Livox 消息、FAST-LIO2 和时间分片雷达节点。依赖 ROS 2 Humble、PCL ROS 与 Gazebo transport 13 / msgs 10；成功判据是所有包构建完成、命令退出 0。源代码与编译产物放在忽略提交的 thirdparty 中。已有实例必须落地后 `down` 再切换定位方式。
 
-PC 操作使用上文通用启动与验收命令。默认走廊即带实体标记的 FAST-LIO 入口；首次教师准备增加 `lio-build`。需要明确切换场景对照时，先确认落地并执行 down，然后使用：
+PC 操作使用上文通用启动与验收命令。默认走廊使用 PX4/GNSS 定位且不加墙面标记；FAST-LIO 对照首次教师准备增加 `lio-build`。需要明确切换场景对照时，先确认落地并执行 down，然后使用：
 
 ```bash
-# 带真实扫描标记的 LIO 入口（与默认设置相同）
-python3 stage3/super_docker.py up --scene corridor --speed 2 --wall-landmarks on
+# 可选标记对照：FAST-LIO 定位，先执行 lio-build
+python3 stage3/super_docker.py up --scene corridor --speed 2 --localization fastlio --wall-landmarks on
 # 原始几何的 LIO 退化对照；不能套用带标记的通过结果
-python3 stage3/super_docker.py up --scene corridor --speed 2 --wall-landmarks off
-# 已验证的旧 PX4 / GNSS 对照
-python3 stage3/super_docker.py up --scene corridor --speed 2 --localization px4
+python3 stage3/super_docker.py up --scene corridor --speed 2 --localization fastlio --wall-landmarks off
+# 默认 PX4 / GNSS 定位；无需附加墙面标记
+python3 stage3/super_docker.py up --scene corridor --speed 2
 ```
 
-场景、速度、定位方式只在 up 设置，后续命令读取当前容器配置。旧定位对照使用 `up --scene corridor --speed 2 --localization px4`；其 900×148 / 30 Hz 瞬时扫描和此前飞行结果仍保留。FAST-LIO 模式目前只支持 corridor + mid360。
+场景、速度、定位方式只在 up 设置，后续命令读取当前容器配置。默认 PX4/GNSS 使用 900×148 / 30 Hz 瞬时扫描；FAST-LIO 模式目前只支持 corridor + mid360，使用时间分片扫描。各次飞行报告记录实际定位模式，不能混用验证结果。
 
 | 接口 | 当前用途 |
 | --- | --- |
@@ -287,9 +295,9 @@ LIO 与控制不读取 Gazebo 真值或预制点云。world 保留 LIO 重力方
 
 启动时先等原始 IMU 连续 0.5 s 测到稳定重力，再送给 FAST-LIO；定位器用约 400 条静止 IMU（2 s）估计重力与陀螺仪偏置，避免仿真生成初期的零加速度被用于重力初始化。初始地图积累 0.15 s 的真实非重复方向扫描；之后按每帧更新。异常数值、过期状态、速度超界和位置跳变不会注入 PX4。`inspect` 不仅检查曾有输出，还要求采样窗口内持续输出 LIO 位姿和配准点云；健康状态未就绪时不要发送飞行指令。日志在 ROS Docker `/tmp/stage3-node-logs/{imu_clean,fastlio,lio_bridge,px4}.log`。失败时先保留日志和评测报告，落地后 down 冷启动。
 
-这仍是 MID-360 仿真近似：SUPER/MARSIM 角度公式按 200 kHz 推进，回波按 60 Hz 的真实 Gazebo 分片查询并组成 30 Hz 帧。分片内各点具有同一真实查询时间，时间分辨率约 17～20 ms，不能称为实机 5 µs 发射时间复现；栅格重复、无回波与量程过滤会减少点数。反射率固定 100、tag=0x10、line=0 是仿真元数据。FAST-LIO 已进行时间补偿，但不能据此声称真实 MID-360 去畸变精度已验收。点云更新仍为约 30 Hz；200 Hz 里程计通过独立滤波副本按新 IMU 测量预测，保留 FAST-LIO 估计的重力、加速度偏置、陀螺仪偏置和过程噪声。每次有有效匹配的点云校正后重置该副本，并重放已经接收到的后续 IMU；不用插值重复发布 30 Hz 位姿。IMU 间隔超过 50 ms 或距最近点云校正超过 200 ms 时停止传播输出，控制桥继续执行数据超时降落。
+这仍是 MID-360 仿真近似：SUPER/MARSIM 角度公式按 200 kHz 推进，当前 LIO 对照保留连续方位角到 Gazebo 栅格查询，不使用原 MARSIM 整度取整；回波按 60 Hz 的真实 Gazebo 分片查询并组成 30 Hz 帧。分片内各点具有同一真实查询时间，时间分辨率约 17～20 ms，不能称为实机 5 µs 发射时间复现；栅格重复、无回波与量程过滤会减少点数。反射率固定 100、tag=0x10、line=0 是仿真元数据。FAST-LIO 已进行时间补偿，但不能据此声称真实 MID-360 去畸变精度已验收。点云更新仍为约 30 Hz；200 Hz 里程计通过独立滤波副本按新 IMU 测量预测，保留 FAST-LIO 估计的重力、加速度偏置、陀螺仪偏置和过程噪声。每次有有效匹配的点云校正后重置该副本，并重放已经接收到的后续 IMU；不用插值重复发布 30 Hz 位姿。IMU 间隔超过 50 ms 或距最近点云校正超过 200 ms 时停止传播输出，控制桥继续执行数据超时降落。
 
-固定源码：FAST-LIO ROS2 `a4743b095409588842a5b30ddfa27e29d2f99164`（GPL-2.0），ikd-Tree `e2e3f4e9d3b95a9e66b1ba83dc98d4a05ed8a3c4`，Livox ROS Driver2 `21445540f0d100dc86a7e6df312dd70bbdb4afdf`（MIT）。Livox 包只构建官方 CustomMsg / CustomPoint schema，未启动硬件驱动或要求 SDK。`prepare_lio.py` 可重复施加本地补丁：输出滤波速度、初始化传播输入和上帧结束时间、延长静止 IMU 初始化、积累初始扫描覆盖、记录初始十帧传播诊断、独立 IMU 传播与协方差输出。实机部署应重新核实驱动、外参、时钟、IMU 噪声与许可证；没有将 Linux 构建产物部署到 RoboPi。
+固定源码：FAST-LIO ROS2 `a4743b095409588842a5b30ddfa27e29d2f99164`（GPL-2.0），ikd-Tree `e2e3f4e9d3b95a9e66b1ba83dc98d4a05ed8a3c4`，Livox ROS Driver2 `21445540f0d100dc86a7e6df312dd70bbdb4afdf`（MIT）。Livox 包只构建官方 CustomMsg / CustomPoint schema，未启动硬件驱动或要求 SDK。`prepare_lio.py` 可重复施加本地补丁：输出滤波速度、初始化传播输入和上帧结束时间、延长静止 IMU 初始化、依据已知静止启动收紧初始化协方差（仅用于仿真）、积累初始扫描覆盖、记录初始十帧传播诊断、独立 IMU 传播与协方差输出。实机部署应重新核实驱动、外参、时钟、IMU 噪声与许可证；没有将 Linux 构建产物部署到 RoboPi。
 
 墙面标记对照来自 `lio_landmarks.json`：两侧各 18 个 0.2×0.7×2.0 m 蓝色实体块，中心 x=±2.9 m、z=1.7 m，y 从 −2.7 到 105.1 m 非等间距分布。向走廊内最多伸出 0.2 m。Gazebo 渲染、碰撞、接触传感器和验收净空均包含它们；没有将标记坐标传给 FAST-LIO 或 SUPER。`--wall-landmarks on/off` 仅在 up 切换，后续 inspect/verify 读取运行配置；评测 JSON 记录开关，不能把带标记结果归到原赛道。对比 GCOPTER 与 SUPER 时固定相同标记设置。
 

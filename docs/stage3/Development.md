@@ -1,15 +1,17 @@
 # Stage 3 开发交接
 
-2026-10-12 收束：本轮停止扩展功能，以当前通过验收的 PC demo 为提交基线。操作只维护在 [Hands-on](Hands-on.md)，实测与失败边界维护在 [Validation](Validation.md)，上游来源与迁移边界见 [Bring-up](Bring-up.md)。
+操作只维护在 [Hands-on](Hands-on.md)，实测与失败边界维护在 [Validation](Validation.md)，上游来源与迁移边界见 [Bring-up](Bring-up.md)。
 
 ## 当前交付
 
 - SUPER 的 ROS 2 Humble 核心、perfect_drone_sim 竞速入口，以及 PX4/Gazebo 实体走廊入口。
-- 默认走廊为 FAST-LIO2＋可选墙面标记；约 30 Hz 配准点云、200 Hz IMU 传播状态，关闭 GNSS 融合，飞控保留气压高度。2 m/s、100 m 往返、双窗口与一次恢复数据后的失流降落已实测。
-- 旧 PX4 定位、宽视场与其他传感器配置作为显式对照保留，各配置不能混用验证记录。
+- 默认走廊为 PX4/GNSS 定位、无附加墙面标记；雷达点云经 PX4 位姿变换后由 ROG-Map 积累为局部占据体素图，另有规划使用的膨胀体素图。点云 RViz 单独展示实时回波，地图 RViz 同时展示占据体素与安全膨胀区域；Gazebo 是第三个窗口。
+- FAST-LIO2＋可选墙面标记作为显式对照保留；约 30 Hz 配准点云、200 Hz IMU 传播状态，关闭 GNSS 融合，飞控保留气压高度。带标记 2 m/s、100 m 往返、双窗口、恢复数据后的失流降落与持续失流直至落地解除解锁均已实测。宽视场与其他传感器配置也保留为显式对照，各配置不能混用验证记录。
 - Jev 文本示例保持原有状态；没有新增 Jev 飞行或付费 API 调用。
 
-当前不算完成：原赛道纯 LIO、LIO 5 档、持续失流直至落地、多轮成功率、实机雷达校准、SUPER 上板、GCOPTER 统一对照、目标识别/追踪。YOLOX＋ByteTrack 仍是候选，尚未复现。
+当前不算完成：原赛道纯 LIO、LIO 5 档、多轮成功率、SUPER 三维轨迹执行、SUPER 上板、GCOPTER 统一对照、目标识别/追踪。YOLOX＋ByteTrack 仍是候选，尚未复现。仿真运行不以实机雷达外参标定为当前验收前提；转向真实 MID-360 时另行核验安装外参和时间同步。
+
+无墙面标记的原走廊在连续扫描角度与静止初始化先验试验中去程通过，回程发生纵向漂移，完整往返未通过；同代码有标记回归通过。详见 Validation。当前 1.95 m 固定高度是课程控制桥的走廊投影，PX4 能执行三维参考；若启用 SUPER 的 Z 轨迹，应在含悬空障碍的三维场景重新验收。
 
 ## 文件职责与改动边界
 
@@ -34,7 +36,7 @@ thirdparty/ 保存上游检出、消息包和 build/install，artifacts/ 保存�
 
 | 资源 | 当前值 |
 | --- | --- |
-| 容器 | uav-stage3-ros、uav-stage3-sitl、uav-stage3-gazebo-view、uav-stage3-rviz-view |
+| 容器 | uav-stage3-ros、uav-stage3-sitl、uav-stage3-gazebo-view、uav-stage3-rviz-view、uav-stage3-rviz-map-view |
 | ROS 域 / Gazebo 分区 | 10 / uav-stage3 |
 | XRCE Agent UDP / 真值 HTTP | 8888 / 8096 |
 | 镜像标签 | uav-stage3-ros:local、uav-stage3-lio:local |
@@ -43,4 +45,6 @@ thirdparty/ 保存上游检出、消息包和 build/install，artifacts/ 保存�
 
 ## 收束检查
 
-本轮代码语法、模型 XML、Python 六项几何/视场测试与先前 C++ CTest 已通过。最终飞行与失流结果见 Validation。没有在收束过程中新增飞行、板端部署或扩大验证声明；持续失流后备专项留给后续任务。
+本轮代码语法、模型 XML、Python 六项几何/视场测试与先前 C++ CTest 已通过。最终飞行与失流结果见 Validation。持续失流气压后备专项已按相同最终配置补测通过；没有进行板端部署或将其他配置写成已验收。
+
+2026-10-13 提交前复核：Stage 3 Python 语法检查、六项几何/视场测试、原生 C++ 扫描方向测试，以及两个 RViz YAML 的解析和地图/点云话题分离检查均通过。现有仿真容器已停止，使用本地 Humble 镜像离线运行测试；没有重新飞行，三窗口往返证据沿用 Validation 中的 2026-10-12 记录。后续首先考虑完整 XYZ 轨迹执行与三维障碍验收，再推进板端和算法对照。

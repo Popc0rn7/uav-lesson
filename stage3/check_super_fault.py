@@ -13,6 +13,7 @@ from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from px4_msgs.msg import VehicleStatus
 from sensor_msgs.msg import PointCloud2
+from nav_msgs.msg import Odometry
 from geometry_msgs.msg import PoseStamped
 from std_msgs.msg import String
 
@@ -21,13 +22,22 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--case',choices=['lidar','planner','clock'],required=True)
     args=parser.parse_args()
-    rclpy.init();node=Node('stage3_fault_check');state=dict(status='',vehicle=None,clouds=0)
+    rclpy.init();node=Node('stage3_fault_check');state=dict(status='',vehicle=None,clouds=0,propagated=0,propagated_at=0.)
+    use_lio=os.environ.get('STAGE3_LOCALIZATION')=='fastlio'
+    persistent=use_lio and args.case=='lidar'
+    if use_lio:
+        def propagated(msg):
+            state['propagated']+=1;state['propagated_at']=time.monotonic()
+        node.create_subscription(Odometry,'/stage3/lio/odom_propagated',propagated,qos_profile_sensor_data)
     node.create_subscription(String,'/stage3/uav1/status',lambda m:state.update(status=m.data),10)
     node.create_subscription(VehicleStatus,'/fmu/out/vehicle_status_v4',lambda m:state.update(vehicle=m),qos_profile_sensor_data)
     node.create_subscription(PointCloud2,'/cloud_registered',lambda m:state.update(clouds=state['clouds']+1),qos_profile_sensor_data)
     command=node.create_publisher(String,'/stage3/uav1/command',10)
     goal=node.create_publisher(PoseStamped,'/stage3/uav1/goal',10)
-    report=dict(passed=False,case=args.case);pid=None;paused=False;attempted=False
+    report=dict(passed=False,case=args.case,persistent_lidar_loss=persistent,
+                localization=os.environ.get('STAGE3_LOCALIZATION','px4'),
+                wall_landmarks=os.environ.get('STAGE3_WALL_LANDMARKS')=='true',
+                speed_mps=float(os.environ.get('STAGE3_SPEED','2')));pid=None;paused=False;attempted=False
 
     def wait(predicate,seconds):
         end=time.monotonic()+seconds
@@ -43,7 +53,7 @@ def main():
         if 'data: true' not in result.stdout:raise RuntimeError('Gazebo pause service not acknowledged: '+result.stdout+result.stderr)
 
     try:
-        wait(lambda:state['vehicle'] is not None and state['status'].startswith('idle: local_ready') and state['clouds']>=20 and command.get_subscription_count()>0,60)
+        wait(lambda:state['vehicle'] is not None and state['status'].startswith('idle: local_ready') and state['clouds']>=20 and (not use_lio or state['propagated']>=20) and command.get_subscription_count()>0,60)
         settle_until=time.monotonic()+30
         wait(lambda:time.monotonic()>=settle_until,35)
         if state['vehicle'].arming_state==state['vehicle'].ARMING_STATE_ARMED:raise RuntimeError('Requires fresh Disarmed run')
@@ -71,18 +81,25 @@ def main():
         wait(lambda:state['status'].startswith('land:'),3)
         report['response_s']=time.monotonic()-started;report['failure_status']=state['status']
         if args.case=='clock':pause(False);paused=False
-        if pid is not None:os.kill(pid,signal.SIGCONT);pid=None
+        # LIO case keeps the LiDAR stopped through the entire landing, so the
+        # FCU barometer fallback is exercised without restored vision aiding.
+        if pid is not None and not persistent:os.kill(pid,signal.SIGCONT);pid=None
         wait(lambda:state['vehicle'].arming_state!=state['vehicle'].ARMING_STATE_ARMED,60)
         report['landing_disarmed']=True
+        if persistent:
+            report['lidar_stopped_until_disarmed']=True
+            report['propagation_silence_s']=time.monotonic()-state['propagated_at']
+            report['propagation_stopped']=report['propagation_silence_s']>.5
         with urlopen('http://127.0.0.1:8096/state',timeout=2) as response:truth=json.load(response)
         report['contact_count']=len(truth['contacts'])
         report['landing_height_m']=truth['pose'][2] if truth['pose'] is not None else None
         # Pausing physics stops clock, odometry and lidar together. The first
         # freshness watchdog to expire depends on their latest sample times.
-        expected=('state or clock timeout','planner or lidar timeout') if args.case=='clock' else ('planner or lidar timeout',)
+        expected=('state or clock timeout','planner or lidar timeout') if args.case=='clock' or persistent else ('planner or lidar timeout',)
         report['passed']=(any(reason in report['failure_status'] for reason in expected) and report['response_s']<3
                           and not report['contact_count'] and report['landing_height_m'] is not None
-                          and report['landing_height_m']<.4 and time.monotonic()-truth['pose_at']<.5)
+                          and report['landing_height_m']<.4 and time.monotonic()-truth['pose_at']<.5
+                          and (not persistent or report.get('propagation_stopped',False)))
     except Exception as exc:report['error']=str(exc)
     finally:
         if paused:pause(False)

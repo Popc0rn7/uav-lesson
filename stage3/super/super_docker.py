@@ -5,8 +5,9 @@ import os
 from pathlib import Path
 import subprocess
 
-ROOT=Path(__file__).resolve().parents[1]
+ROOT=Path(__file__).resolve().parents[2]
 WORKSPACE=ROOT/'thirdparty/super_gazebo_ws'
+SOURCE=ROOT/'submodules/SUPER'
 ROS='uav-stage3-ros'
 SITL='uav-stage3-sitl'
 IMAGE='uav-computer-ros-humble:local'
@@ -38,40 +39,42 @@ def main():
     args=parser.parse_args()
     if args.build_jobs < 1:parser.error('build-jobs 必须大于 0')
     if args.action=='prepare':
-        run('python3',ROOT/'stage3/prepare_super.py','--gazebo','--destination',WORKSPACE/'src/SUPER')
+        run('python3',ROOT/'stage3/super/prepare_super.py')
         return
     run('docker','info','--format','{{.ServerVersion}}')
     if args.action=='lio-build':
-        run('python3',ROOT/'stage3/prepare_lio.py')
+        run('python3',ROOT/'stage3/super/prepare_lio.py')
         run('docker','image','inspect',IMAGE,stdout=subprocess.DEVNULL)
         run('docker','run','--rm','--network','none','--user',f'{os.getuid()}:{os.getgid()}',
             '--mount',f'type=bind,source={ROOT}/thirdparty/fast_lio_ws,target=/lio_ws',
             '--mount',f'type=bind,source={WORKSPACE},target=/super_ws',
+            '--mount',f'type=bind,source={SOURCE},target=/super_ws/src,readonly',
             '--mount',f'type=bind,source={ROOT},target=/lesson,readonly',
             '-e',f'CMAKE_BUILD_PARALLEL_LEVEL={args.build_jobs}',
             '-e',f'MAKEFLAGS=-j{args.build_jobs}','--entrypoint','bash',IMAGE,'-lc',
             'set -e; source /opt/ros/humble/setup.bash; source /opt/px4_ws/install/local_setup.bash; cd /lio_ws; '
             'colcon build --packages-up-to fast_lio --executor sequential --cmake-args -DCMAKE_BUILD_TYPE=Release; '
             'source /lio_ws/install/local_setup.bash; cd /super_ws; '
-            'colcon build --base-paths /lesson/stage3/ros_src --build-base build-prefilter --install-base install-prefilter --cmake-force-configure --cmake-args -DCMAKE_BUILD_TYPE=Release')
+            'colcon build --base-paths /lesson/stage3/super/ros_src --build-base build-prefilter --install-base install-prefilter --cmake-force-configure --cmake-args -DCMAKE_BUILD_TYPE=Release')
     elif args.action=='build':
-        if not (WORKSPACE/'src/SUPER').is_dir():parser.error('请先 prepare')
-        run('python3',ROOT/'stage3/patch_super_height.py')
+        if not (SOURCE/'super_planner/CMakeLists.txt').is_file():parser.error('请先 prepare')
+        (WORKSPACE/'src').mkdir(parents=True,exist_ok=True)
         build_args=['--build-arg',f'HUMBLE_IMAGE={args.humble_image}'] if args.humble_image else []
         run('docker','build','--network','host','--build-arg','http_proxy','--build-arg','https_proxy',
-            '--build-arg',f'DEV_UID={os.getuid()}','--build-arg',f'DEV_GID={os.getgid()}',
             '--build-arg',f'BUILD_JOBS={args.build_jobs}',
             *build_args,'-t',IMAGE,ROOT/'develop/docker')
         # Core build only: no MAVROS, ProjectAirSim, perfect_drone_sim or rendering demo.
         run('docker','run','--rm','--network','none','--user',f'{os.getuid()}:{os.getgid()}',
             '--mount',f'type=bind,source={WORKSPACE},target=/super_ws',
+            '--mount',f'type=bind,source={SOURCE},target=/super_ws/src,readonly',
             '--mount',f'type=bind,source={ROOT},target=/lesson,readonly',
             '-e',f'CMAKE_BUILD_PARALLEL_LEVEL={args.build_jobs}','-e',f'MAKEFLAGS=-j{args.build_jobs}',
             '--entrypoint','bash',IMAGE,'-lc',
             'set -e; source /opt/ros/humble/setup.bash; source /opt/px4_ws/install/local_setup.bash; cd /super_ws; '
-            'colcon build --packages-up-to super_planner --executor sequential '
+            'colcon build --base-paths /super_ws/src/super_planner /super_ws/src/rog_map '
+            '/super_ws/src/mars_uav_sim/mars_quadrotor_msgs --packages-up-to super_planner --executor sequential '
             '--cmake-args -DCMAKE_BUILD_TYPE=Release; '
-            'colcon build --base-paths /lesson/stage3/ros_src --build-base build-prefilter '
+            'colcon build --base-paths /lesson/stage3/super/ros_src --build-base build-prefilter '
             '--install-base install-prefilter --cmake-args -DCMAKE_BUILD_TYPE=Release')
     elif args.action=='up':
         args.scene=args.scene or 'default'
@@ -93,9 +96,9 @@ def main():
         vehicle=ROOT/'stage2/models/x500_experiment'
         if args.scene=='corridor':
             if not (WORKSPACE/'install-prefilter/local_setup.bash').is_file():parser.error('请先 build C++ 雷达预处理器')
-            run('python3',ROOT/'stage3/generate_gazebo_corridor.py','--lidar-mount-z',args.lidar_mount_z,*(['--temporal-scan'] if use_lio else []),*(['--wall-landmarks'] if args.wall_landmarks=='on' else []))
-            vehicle=ROOT/'stage3/models/x500_super'
-            extra=['--mount',f'type=bind,source={ROOT}/stage3/worlds/corridor.sdf,target=/opt/px4-gazebo/share/gz/worlds/corridor.sdf,readonly',
+            run('python3',ROOT/'stage3/super/generate_gazebo_corridor.py','--lidar-mount-z',args.lidar_mount_z,*(['--temporal-scan'] if use_lio else []),*(['--wall-landmarks'] if args.wall_landmarks=='on' else []))
+            vehicle=ROOT/'stage3/super/models/x500_super'
+            extra=['--mount',f'type=bind,source={ROOT}/stage3/super/worlds/corridor.sdf,target=/opt/px4-gazebo/share/gz/worlds/corridor.sdf,readonly',
                    '-e','PX4_GZ_MODEL_POSE=0,0,0.24,0,0,1.57079632679',
                    '-e','PX4_PARAM_EKF2_BARO_CTRL=0',
                    '-e','PX4_PARAM_EKF2_EV_CTRL=2','-e','PX4_PARAM_EKF2_HGT_REF=3',
@@ -103,8 +106,8 @@ def main():
                    '-e','PX4_PARAM_EKF2_GPS_P_NOISE=0.05',
                    '-e','PX4_PARAM_SENS_GPS0_DELAY=0','-e','PX4_PARAM_SENS_GPS1_DELAY=0',
                    '-e','PX4_PARAM_MPC_XY_P=1.2']
-            if args.lidar=='super360':sensor=ROOT/'stage3/models/super360'
-            elif args.lidar=='mid360':sensor=ROOT/'stage3/models/mid360'
+            if args.lidar=='super360':sensor=ROOT/'stage3/super/models/super360'
+            elif args.lidar=='mid360':sensor=ROOT/'stage3/super/models/mid360'
             height_source='lidar' if args.lidar=='super360' else 'px4'
             if height_source=='px4':
                 extra.extend(['-e','PX4_PARAM_EKF2_BARO_CTRL=1','-e','PX4_PARAM_EKF2_EV_CTRL=0',
@@ -119,29 +122,30 @@ def main():
                        '-e',f'STAGE3_SENSOR_Z={args.lidar_mount_z+.035}',
                        '-e',f'STAGE3_SELF_FILTER={str(args.self_filter=="on").lower()}',
                        '-e',f'STAGE3_LIDAR_RANGE={69.9 if args.lidar!="mid360s" else 39.9}',
-                       '-e',f'STAGE3_CONFIG=/lesson/stage3/super_corridor_{args.speed}.yaml',
+                       '-e',f'STAGE3_CONFIG=/lesson/stage3/super/super_corridor_{args.speed}.yaml',
                        '-e','SUPER_CENTER_Z_MIN=1.4','-e','SUPER_CENTER_Z_MAX=2.2']
         run('docker','run','-d','--init','--name',SITL,'--network','host','--device','/dev/dri/renderD128',*extra,
             '--mount',f'type=bind,source={vehicle},target=/opt/px4-gazebo/share/gz/models/x500_experiment,readonly',
             '--mount',f'type=bind,source={sensor},target=/opt/px4-gazebo/share/gz/models/mid360s,readonly',
-            '--mount',f'type=bind,source={ROOT}/stage3/px4_start.sh,target=/stage3-start.sh,readonly',
-            '--mount',f'type=bind,source={ROOT}/stage3,target=/lesson-stage3,readonly',
+            '--mount',f'type=bind,source={ROOT}/stage3/super/px4_start.sh,target=/stage3-start.sh,readonly',
+            '--mount',f'type=bind,source={ROOT}/stage3/super,target=/lesson-stage3,readonly',
             '-e','HEADLESS=1','-e','EGL_PLATFORM=surfaceless','-e','GZ_PARTITION=uav-stage3',
             '-e','PX4_SYS_AUTOSTART=4001','-e','PX4_SIM_MODEL=gz_x500_experiment','-e',f'PX4_GZ_WORLD={args.scene}',
             '--entrypoint','/bin/sh',args.sitl_image,'/stage3-start.sh')
         run('docker','run','-d','--init','--name',ROS,'--network','host',
             '--mount',f'type=bind,source={ROOT},target=/lesson,readonly',
-            '--mount',f'type=bind,source={WORKSPACE},target=/super_ws',
-            *(['--mount',f'type=bind,source={ROOT}/thirdparty/fast_lio_ws,target=/lio_ws'] if use_lio else []),
-            '-e','FASTRTPS_DEFAULT_PROFILES_FILE=/lesson/stage3/race_view_dds.xml',*ros_extra,
-            ros_image,'bash','/lesson/stage3/run_super_nodes.sh')
+            '--mount',f'type=bind,source={WORKSPACE},target=/super_ws,readonly',
+            '--mount',f'type=bind,source={SOURCE},target=/super_ws/src,readonly',
+            *(['--mount',f'type=bind,source={ROOT}/thirdparty/fast_lio_ws,target=/lio_ws,readonly'] if use_lio else []),
+            '-e','FASTRTPS_DEFAULT_PROFILES_FILE=/lesson/stage3/super/race_view_dds.xml',*ros_extra,
+            ros_image,'bash','/lesson/stage3/super/run_super_nodes.sh')
     elif args.action=='scan':
         if not exists(ROS):parser.error('运行环境不存在，请先 up')
         env=subprocess.check_output(['docker','inspect',ROS,'--format','{{range .Config.Env}}{{println .}}{{end}}'],text=True)
         hz=60 if 'STAGE3_LOCALIZATION=fastlio' in env.splitlines() else (30 if 'STAGE3_LIDAR=mid360' in env.splitlines() else 10)
-        run('python3',ROOT/'stage3/check_gazebo_scan.py','--expected-hz',hz)
+        run('python3',ROOT/'stage3/super/check_gazebo_scan.py','--expected-hz',hz)
     elif args.action=='contact-check':
-        run('python3',ROOT/'stage3/check_gazebo_contact.py')
+        run('python3',ROOT/'stage3/super/check_gazebo_contact.py')
     elif args.action in ('view','view-close'):
         from super_gazebo_view import main as view
         view(close=args.action=='view-close',image=args.sitl_image)
@@ -165,7 +169,7 @@ def main():
             'source /opt/ros/humble/setup.bash; source /opt/px4_ws/install/local_setup.bash; '
             'source /super_ws/install/local_setup.bash; '
             'if [ -f /lio_ws/install/local_setup.bash ]; then source /lio_ws/install/local_setup.bash; fi; '
-            f'python3 -u /lesson/stage3/{program}')
+            f'python3 -u /lesson/stage3/super/{program}')
     elif args.action=='down':
         # Refuse removal while flying; down is for already disarmed SITL.
         if exists(SITL) and subprocess.check_output(['docker','inspect',SITL,'--format','{{.State.Running}}'],text=True).strip()=='true':

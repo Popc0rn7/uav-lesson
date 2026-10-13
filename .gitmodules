@@ -1,0 +1,4 @@
+[submodule "submodules/SUPER"]
+	path = submodules/SUPER
+	url = https://github.com/Popc0rn7/SUPER-sim.git
+	branch = feat/sim

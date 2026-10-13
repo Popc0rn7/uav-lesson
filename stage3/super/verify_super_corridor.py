@@ -34,8 +34,8 @@ def main():
     node.create_subscription(VehicleStatus,'/fmu/out/vehicle_status_v4',lambda m:state.update(vehicle=m),qos_profile_sensor_data)
     command=node.create_publisher(String,'/stage3/uav1/command',10)
     goal_pub=node.create_publisher(PoseStamped,'/stage3/uav1/goal',10)
-    layout=json.loads(Path('/lesson/stage3/corridor_layout.json').read_text())
-    landmarks=json.loads(Path('/lesson/stage3/lio_landmarks.json').read_text()) if os.environ.get('STAGE3_WALL_LANDMARKS')=='true' else None
+    layout=json.loads(Path('/lesson/stage3/super/corridor_layout.json').read_text())
+    landmarks=json.loads(Path('/lesson/stage3/super/lio_landmarks.json').read_text()) if os.environ.get('STAGE3_WALL_LANDMARKS')=='true' else None
     speed=int(float(os.environ.get('STAGE3_SPEED','2')))
     report=dict(passed=False,speed_mps=speed,localization=os.environ.get('STAGE3_LOCALIZATION','px4'),wall_landmarks=landmarks is not None,reference_topic='/stage3/uav1/reference',legs=[],peak_speed_mps=0.,min_clearance_m=None,
                 min_height_m=None,max_height_m=None,max_tracking_truth_error_m=0.,min_reference_z_m=None,max_reference_z_m=None,max_tracking_error_m=0.)

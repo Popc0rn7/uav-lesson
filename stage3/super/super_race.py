@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 import subprocess
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 WS = ROOT / 'thirdparty/super_gazebo_ws'
 NAME = 'uav-stage3-race'
 IMAGE = 'uav-stage3-race:local'
@@ -20,9 +20,11 @@ def main():
     parser.add_argument('action', choices=['build', 'up', 'verify', 'view', 'view-close', 'logs', 'down'])
     args = parser.parse_args()
     if args.action == 'build':
-        if not (WS / 'src/SUPER').is_dir():
-            parser.error('先运行 stage3/super_docker.py prepare 和 build')
-        run('docker', 'build', '-f', ROOT / 'stage3/Dockerfile.race', '-t', IMAGE, ROOT / 'stage3')
+        if not (WS / 'src').is_dir():
+            parser.error('先运行 stage3/super/super_docker.py prepare 和 build')
+        from patch_runtime_logs import patch
+        patch(super_source=WS / 'src')
+        run('docker', 'build', '-f', ROOT / 'stage3/super/Dockerfile.race', '-t', IMAGE, ROOT / 'stage3/super')
         run('docker', 'run', '--rm', '--network', 'none', '--user', f'{os.getuid()}:{os.getgid()}',
             '--mount', f'type=bind,source={WS},target=/super_ws', '--entrypoint', 'bash', IMAGE, '-lc',
             'set -e; source /opt/ros/humble/setup.bash; cd /super_ws; '
@@ -34,11 +36,11 @@ def main():
             parser.error('请先 build')
         run('docker', 'run', '-d', '--init', '--name', NAME, '--network', 'host',
             '--mount', f'type=bind,source={ROOT},target=/lesson,readonly',
-            '--mount', f'type=bind,source={WS},target=/super_ws', IMAGE)
+            '--mount', f'type=bind,source={WS},target=/super_ws,readonly', IMAGE)
     elif args.action == 'verify':
         run('docker', 'exec', NAME, 'bash', '-lc',
             'source /opt/ros/humble/setup.bash; source /super_ws/install/local_setup.bash; '
-            'python3 /lesson/stage3/verify_super_race.py')
+            'python3 /lesson/stage3/super/verify_super_race.py')
     elif args.action == 'view':
         display = os.environ.get('DISPLAY')
         authority = os.environ.get('XAUTHORITY')
@@ -51,10 +53,10 @@ def main():
             '--mount', f'type=bind,source={ROOT},target=/lesson,readonly',
             '--mount', f'type=bind,source={WS},target=/super_ws,readonly',
             '-e', f'DISPLAY={display}', '-e', 'XAUTHORITY=/tmp/desktop.xauth',
-            '-e', 'FASTRTPS_DEFAULT_PROFILES_FILE=/lesson/stage3/race_view_dds.xml',
+            '-e', 'FASTRTPS_DEFAULT_PROFILES_FILE=/lesson/stage3/super/race_view_dds.xml',
             '-e', 'QT_X11_NO_MITSHM=1', '--entrypoint', 'bash', IMAGE, '-lc',
             'source /opt/ros/humble/setup.bash; source /super_ws/install/local_setup.bash; '
-            'exec rviz2 -d /lesson/stage3/super_race.rviz')
+            'exec rviz2 -d /lesson/stage3/super/super_race.rviz')
     elif args.action == 'view-close':
         run('docker', 'stop', '-t', '10', NAME + '-view')
         run('docker', 'rm', NAME + '-view')

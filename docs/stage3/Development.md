@@ -1,17 +1,20 @@
 # Stage 3 开发交接
 
+SUPER 相关代码统一放在 `stage3/super/`：包含运行入口、控制与传感器适配、场景与可视化配置、`ros_src/` 和 `tests/`。生成的 `models/`、`worlds/` 同样位于该目录并忽略 Git；核心源码位于 `submodules/SUPER/` 的 `feat/sim` 分支，`thirdparty/` 只保存编译产物与旧参考副本。Stage 3 根目录保留 Jev 文本示例和阶段环境检查。
+
 操作只维护在 [Hands-on](Hands-on.md)，实测与失败边界维护在 [Validation](Validation.md)，上游来源与迁移边界见 [Bring-up](Bring-up.md)。
 
 后续构建收敛：算力环境改为 `develop/docker/Dockerfile` 直接构建 `uav-computer-ros-humble:local`，不再依赖 `gcopter-humble`。新镜像、算法编译、离线依赖和只读 DDS 检查已通过；完整新实例飞行与故障测试尚未复验，历史飞行证据不自动转移到新镜像。
+
+当前核心源码正在按源仓库精简，具体保留与回退项见 [SUPER 核心整理](SUPER-fork.md)。源码与补丁已更新，原 install 和历史飞行证据仍属于整理前版本；完成重新构建和 GNSS 飞行验收前，不将回退后配置标记为已验收。
 
 ## 当前交付
 
 - SUPER 的 ROS 2 Humble 核心、perfect_drone_sim 竞速入口，以及 PX4/Gazebo 实体走廊入口。
 - 默认走廊为 PX4/GNSS 定位、无附加墙面标记；雷达点云经 PX4 位姿变换后由 ROG-Map 积累为局部占据体素图，另有规划使用的膨胀体素图。点云 RViz 单独展示实时回波，地图 RViz 同时展示占据体素与安全膨胀区域；Gazebo 是第三个窗口。
-- FAST-LIO2＋可选墙面标记作为显式对照保留；约 30 Hz 配准点云、200 Hz IMU 传播状态，关闭 GNSS 融合，飞控保留气压高度。带标记 2 m/s、100 m 往返、双窗口、恢复数据后的失流降落与持续失流直至落地解除解锁均已实测。宽视场与其他传感器配置也保留为显式对照，各配置不能混用验证记录。
 - Jev 文本示例保持原有状态；没有新增 Jev 飞行或付费 API 调用。
 
-当前不算完成：原赛道纯 LIO、LIO 5 档、多轮成功率、SUPER 三维轨迹执行、SUPER 上板、GCOPTER 统一对照、目标识别/追踪。YOLOX＋ByteTrack 仍是候选，尚未复现。仿真运行不以实机雷达外参标定为当前验收前提；转向真实 MID-360 时另行核验安装外参和时间同步。
+当前不算完成：多轮成功率、SUPER 三维轨迹执行、SUPER 上板、GCOPTER 统一对照、目标识别/追踪。YOLOX＋ByteTrack 仍是候选，尚未复现。仿真运行不以实机雷达外参标定为当前验收前提；转向真实 MID-360 时另行核验安装外参和时间同步。
 
 无墙面标记的原走廊在连续扫描角度与静止初始化先验试验中去程通过，回程发生纵向漂移，完整往返未通过；同代码有标记回归通过。详见 Validation。当前 1.95 m 固定高度是课程控制桥的走廊投影，PX4 能执行三维参考；若启用 SUPER 的 Z 轨迹，应在含悬空障碍的三维场景重新验收。
 
@@ -19,16 +22,16 @@
 
 | 工作区域 | 主要文件 | 交接约定 |
 | --- | --- | --- |
-| 统一运行入口 | develop/docker/、stage3/super_docker.py、super_gazebo_view.py、Dockerfile.race | 修改默认配置或运行方式时同步 Hands-on |
-| 场景与传感器 | generate_gazebo_corridor.py、corridor_layout.json、lio_landmarks.json、px4_start.sh、gazebo_warmup.py | 场景变化须独立标记评测条件 |
-| LiDAR / IMU / LIO | ros_src/stage3_lidar/、super_imu.py、prepare_lio.py、patch_lio_forward.py、fast_lio_gazebo.yaml、lio_bridge.py、lio_geometry.py | 维持时间、坐标系、外参、QoS 与失流语义 |
-| SUPER / PX4 控制 | prepare_super.py、patch_super_height.py、super_px4.py、super_*.yaml | 更改控制链后必须重新实际飞行验收 |
+| 统一运行入口 | develop/docker/、stage3/super/super_docker.py、super_gazebo_view.py、Dockerfile.race | 修改默认配置或运行方式时同步 Hands-on |
+| 场景与传感器 | generate_gazebo_corridor.py、corridor_layout.json、px4_start.sh、gazebo_warmup.py | 场景变化须独立标记评测条件 |
+| LiDAR / IMU | ros_src/stage3_lidar/、super_imu.py、super_lidar.py | 维持时间、坐标系、外参、QoS 与失流语义 |
+| SUPER / PX4 控制 | submodules/SUPER/、super_px4.py、super_*.yaml | 更改控制链后必须重新实际飞行验收 |
 | 验收与诊断 | inspect_super.py、verify_super_*.py、check_*.py、gazebo_monitor.py、tests/ | 真值只用于评测，不能馈入定位或控制 |
 | 独立竞速入口 | super_race.py、run_super_race.sh、super_race.* | perfect_drone_sim 结果不替代 PX4 动力学验收 |
 
-stage3/models/、stage3/worlds/ 由生成器在启动时创建，忽略提交；它们没有被删除。模型来源为版本化的 Stage 2 输入与 Stage 3 生成器、场景 JSON。视场测试在临时目录生成自己的模型，不读取或改写正在运行的世界。
+stage3/super/models/、stage3/super/worlds/ 由生成器在启动时创建，忽略提交；它们没有被删除。模型来源为版本化的 Stage 2 输入与 Stage 3 生成器、场景 JSON。视场测试在临时目录生成自己的模型，不读取或改写正在运行的世界。
 
-thirdparty/ 保存上游检出、消息包和 build/install，artifacts/ 保存模型缓存，均不提交。新 worktree 不会自动带有这些依赖；按教师准备流程准备，不能把另一个工作区的 Linux 产物直接视为板端产物。当前提交不包含临时日志、截图、轨迹或真实密钥。
+submodules/SUPER/ 保存核心源码，thirdparty/ 保存本机构建产物和旧参考检出，artifacts/ 保存模型缓存，均不提交。新 worktree 不会自动带有这些依赖；按教师准备流程准备，不能把另一个工作区的 Linux 产物直接视为板端产物。当前提交不包含临时日志、截图、轨迹或真实密钥。
 
 ## worktree 并行边界
 

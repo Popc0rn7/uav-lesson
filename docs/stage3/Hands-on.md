@@ -8,14 +8,16 @@ PX4/Gazebo 入口在 PC 运行两个 Docker：ROS 2 Humble 内运行 SUPER、ROG
 
 算力镜像统一为 `uav-computer-ros-humble:local`，由 [Dockerfile](../../develop/docker/Dockerfile) 从固定摘要的 OSRF Humble 镜像构建。直接安装编译、SUPER/FAST-LIO2 与 Harmonic 接入依赖，构建固定提交的 `px4_msgs` 和 XRCE Agent v2.4.2；不再读取 `gcopter-humble` 容器或其 install 目录。源码版本来自 GCOPTER 原联调记录，算法工作区仍在 PC 挂载编译。
 
-前置条件：Docker 可访问；`thirdparty/SUPER` 指向搬入的 ROS 2 源码；PC 有 `/dev/dri/renderD128`；已有 Stage 2 PX4/Gazebo 镜像。本机 Docker 需要已授权的执行权限，下面的命令在有 Docker 权限的 PC 终端运行。
+前置条件：PC 可使用 Docker、访问 GitHub 和软件源，有 `/dev/dri/renderD128`，并已准备 Stage 2 PX4/Gazebo 镜像。在 **PC 仓库根目录**执行：
 
 ```sh
-python3 stage3/super_docker.py prepare
-python3 stage3/super_docker.py build
+python3 stage3/super/super_docker.py prepare
+python3 stage3/super/super_docker.py build
 ```
 
-`prepare` 将源码复制到 Git 忽略的 `thirdparty/super_gazebo_ws/src/SUPER`，保留已有 ROS 2 修改，排除旧 build/install/log，并修正 SUPER 入口强制关闭仿真时间的行为。目标已存在时拒绝覆盖，已有准备好的副本直接执行 build。原 `../SUPER` 及旧 AirSim 链接保持原样。
+`prepare` 初始化并检查 `submodules/SUPER`，源码来自 `.gitmodules` 指定的 `https://github.com/Popc0rn7/SUPER-sim.git`。新用户可用 `git clone --recurse-submodules` 获取课程仓库及其固定的核心 commit。开发修改只在 submodule 的 `feat/sim` 分支进行，不复制相邻 SUPER 源码，也不运行源码补丁脚本。
+
+成功判据：退出码 0，三个核心包文件存在。下载失败时保留输出，检查 GitHub 访问后重试；已有 submodule 时 prepare 不覆盖或切换当前分支。build 将 `submodules/SUPER` 只读挂载为 `/super_ws/src`，产物写到 PC 的 `thirdparty/super_gazebo_ws`。只构建 Stage 3 使用的三个核心包与课程雷达节点。
 
 `build` 创建 `uav-computer-ros-humble:local`，然后在临时容器内构建 `mars_quadrotor_msgs`、`rog_map`、`super_planner` 和课程雷达节点。编译限制两路并发。`lio-build` 使用同一镜像编译 FAST-LIO2，不再派生另一份 LIO 镜像。成功判据：镜像与各包构建完成、退出码 0；下载/镜像构建/源码编译属于课前准备，不提交产物或日志。
 
@@ -27,21 +29,20 @@ python3 stage3/super_docker.py build
 
 ```sh
 docker build --network host --build-arg http_proxy --build-arg https_proxy \
-  --build-arg DEV_UID="$(id -u)" --build-arg DEV_GID="$(id -g)" \
   -t uav-computer-ros-humble:local develop/docker
 docker run --rm --network none uav-computer-ros-humble:local \
   python3 /opt/uav/check_runtime.py
 ```
 
-成功判据：构建退出码 0，自检 `passed=true`，包含消息 CDR 往返、Harmonic 桥路径、Agent 动态库和固定提交。此检查不启动 Agent、不解锁飞机。镜像默认加载 ROS/PX4 消息环境并等待；具体实验在启动时指定脚本。
+成功判据：构建退出码 0，自检 `passed=true`，包含消息 CDR 往返、Harmonic 桥路径、Agent 动态库和固定提交。此检查不启动 Agent、不解锁飞机。镜像默认以 root 加载 ROS/PX4 消息环境并等待；编译容器通过 `--user` 使用 PC 的 UID/GID，运行工作区只读，上游日志写入 `/tmp/stage3-super`、`/tmp/stage3-fastlio`。已有算法产物需重新执行 build；使用 FAST-LIO 时还需 lio-build，使日志路径补丁生效。具体实验在启动时指定脚本。
 
 ## 启动和数据检查（PC）
 
 先确认没有其它 PX4/Agent 占用 UDP 8888 或同名容器。命令仅管理 `uav-stage3-ros`、`uav-stage3-sitl`，不会停止其它课程进程：
 
 ```sh
-python3 stage3/super_docker.py up
-python3 stage3/super_docker.py inspect
+python3 stage3/super/super_docker.py up
+python3 stage3/super/super_docker.py inspect
 ```
 
 使用 Stage 2 的两个只读模型挂载，默认 Gazebo `default` 空场景、无 GUI、GPU 无界面渲染；雷达参数仍来自 `stage2/models/mid360s/model.sdf`。PX4/SUPER 共同使用仿真时钟、ROS 域 10；Gazebo 分区为 `uav-stage3`。启动不解锁。DDS 使用 Fast DDS，`ROS_LOCALHOST_ONLY=0`，当前只验收同一 PC 的 host 网络，没有上板或跨机验收。
@@ -53,7 +54,7 @@ python3 stage3/super_docker.py inspect
 前置条件：上述检查通过。下面命令**会让本任务的仿真飞机起飞**，依次验收 2 m 悬停、SUPER 规划到局部 ENU `(2,0,2)` m、到点稳定和降落：
 
 ```sh
-python3 stage3/super_docker.py verify
+python3 stage3/super/super_docker.py verify
 ```
 
 预期依次输出起飞悬停通过、SUPER 到点通过，最终 JSON 的 `passed=true`，并确认 `landing_disarmed`。到点判据为误差小于 0.3 m、速度小于 0.3 m/s、持续 2 秒；本次是空场景闭环，不代表密林或碰撞专项通过。失败也请求降落，若未确认 Disarmed 不自动删除容器。
@@ -81,9 +82,9 @@ python3 stage3/super_docker.py verify
 确认降落并 Disarmed 后：
 
 ```sh
-python3 stage3/super_docker.py down
+python3 stage3/super/super_docker.py down
 # 重新启动时所有仿真状态重新开始，源码/构建产物保留。
-python3 stage3/super_docker.py up
+python3 stage3/super/super_docker.py up
 ```
 
 down 对仍解锁或无法确认状态的飞机报错，保留现场。删除前保存需要的容器日志到仓库外；节点日志在 ROS 容器 `/tmp/stage3-node-logs/`，验收 JSON 在 `/tmp/stage3-super-flight.json`。
@@ -107,7 +108,7 @@ down 对仍解锁或无法确认状态的飞机报错，保留现场。删除前
 教师在 PC 先完成前文 `prepare` 和核心 `build`，再准备渲染镜像及仿真包：
 
 ```sh
-python3 stage3/super_race.py build
+python3 stage3/super/super_race.py build
 ```
 
 此步骤安装 GLFW/GLEW、Xvfb 和 Mesa，构建 `marsim_render`、`perfect_drone_sim` 与 SUPER 核心；不依赖 MAVROS 或旧 ProjectAirSim。当前复用已有本机 Humble 基础镜像。运行使用 Xvfb + Mesa 软件渲染，不需要宿主桌面授权。
@@ -115,8 +116,8 @@ python3 stage3/super_race.py build
 学员在 PC 启动、验收：
 
 ```sh
-python3 stage3/super_race.py up
-python3 stage3/super_race.py verify
+python3 stage3/super/super_race.py up
+python3 stage3/super/super_race.py verify
 ```
 
 容器为 `uav-stage3-race`，ROS 域 **13**、Fast DDS、host 网络；与 PX4 demo 的域 10 隔离。使用系统时间，不能给这个模拟器强行开启 `use_sim_time`。`up` 启动模拟器和规划器，等待目标；`verify` 收到至少 100 帧运行时雷达点云和里程计、加载模拟器同一份 PCD 净空参考后，执行往返。每段要求误差 <0.3 m、速度 <0.5 m/s、稳定 1 秒；每段超时 120 秒。点云净空门限 0.2 m，与该竞速配置的机器人半径一致；该检查不等于物理碰撞检测。
@@ -130,17 +131,17 @@ docker cp uav-stage3-race:/tmp/super-race /tmp/stage3-race-evidence
 验收只适用于初始状态。再次运行前重置本任务容器：
 
 ```sh
-python3 stage3/super_race.py down
-python3 stage3/super_race.py up
-python3 stage3/super_race.py verify
+python3 stage3/super/super_race.py down
+python3 stage3/super/super_race.py up
+python3 stage3/super/super_race.py verify
 ```
 
-故障诊断（PC）：`python3 stage3/super_race.py logs`。没有点云时检查 `sim.log` 的 GLFW/OpenGL/PCD 错误；没有规划检查 `planner.log`、目标订阅及域 13。容器名称冲突时先保存日志，再 `down/up`。验收失败不会把本轮写成通过，结果中保留错误和轨迹；模拟器不负责物理碰撞响应，失败后重置再试。
+故障诊断（PC）：`python3 stage3/super/super_race.py logs`。没有点云时检查 `sim.log` 的 GLFW/OpenGL/PCD 错误；没有规划检查 `planner.log`、目标订阅及域 13。容器名称冲突时先保存日志，再 `down/up`。验收失败不会把本轮写成通过，结果中保留错误和轨迹；模拟器不负责物理碰撞响应，失败后重置再试。
 
 观看飞行（PC 图形桌面终端，无需在宿主安装 ROS）：
 
 ```sh
-python3 stage3/super_race.py view
+python3 stage3/super/super_race.py view
 ```
 
 这个命令在独立 `uav-stage3-race-view` 容器打开 RViz，使用当前桌面的 DISPLAY/XAUTHORITY 和只读 X11 挂载，不修改 xhost 访问列表。独立容器使用域 13 的 UDP DDS 配置，避免 Docker 共享内存隔离导致发现话题却收不到数据。默认跟随 `perfect_drone`，显示点云、飞机模型和 `/path` 实际飞行轨迹。滚轮缩放、左键拖动旋转；按 H 显示/隐藏侧面板，Views 中有 `Corridor overview` 全景视角。
@@ -148,23 +149,23 @@ python3 stage3/super_race.py view
 保持窗口打开，在另一个 PC 终端重置并执行飞行；这会自动完成往返，无需点击目标：
 
 ```sh
-python3 stage3/super_race.py down
-python3 stage3/super_race.py up
-python3 stage3/super_race.py verify
+python3 stage3/super/super_race.py down
+python3 stage3/super/super_race.py up
+python3 stage3/super/super_race.py verify
 ```
 
 预期先等待约 10–15 秒积累点云，然后飞到另一端并返回，停稳，终端输出 passed=true。RViz 的 2D Goal Pose 已配置为 `/planning/click_goal`，可在自动验收结束后手动选目标；自动验收期间不要额外点击目标。已有窗口时无需重复 view；关闭及再次打开使用：
 
 ```sh
-python3 stage3/super_race.py view-close
-python3 stage3/super_race.py view
+python3 stage3/super/super_race.py view-close
+python3 stage3/super/super_race.py view
 ```
 
 若无窗口，检查 PC 桌面 DISPLAY/XAUTHORITY 和 `docker logs uav-stage3-race-view`；SSH 无桌面会被启动预检拒绝。有网格而无点云时检查域 13、race 容器和 UDP DDS 配置是否加载；全局点云可能错过启动发布，保持 RViz 打开再 down/up 仿真。关闭 RViz 容器不停止模拟器，down 仿真不关闭 RViz。
 
 该配置为通用 360° 雷达（`lidar_type: 2`），并非真实 MID-360 驱动或不重复扫描验收。10 m/s 是规划上限，实际速度见结果；15/20/25 m/s、多难度统计、真实动力学、板端均另行验收。原始上游 benchmark 的无射线投射地图策略予以保留，本 demo 不用于证明未知区域安全性。
 
-课程规划配置为 `stage3/super_race.yaml`，从上游 medium/10 m/s quiet 配置派生：地图垂直范围 6→10 m、虚拟天花板 5→6 m；避免膨胀与机器人半径裁剪使搜索种子处在走廊边界外。场景没有实体顶棚，允许三维绕障；不能将完成任务等同于全程水平侧绕立柱。实际高度范围在结果中记录。
+课程规划配置为 `stage3/super/super_race.yaml`，从上游 medium/10 m/s quiet 配置派生：地图垂直范围 6→10 m、虚拟天花板 5→6 m；避免膨胀与机器人半径裁剪使搜索种子处在走廊边界外。场景没有实体顶棚，允许三维绕障；不能将完成任务等同于全程水平侧绕立柱。实际高度范围在结果中记录。
 
 ## Gazebo 实体走廊与三窗口（PC）
 
@@ -175,15 +176,15 @@ python3 stage3/super_race.py view
 PC，在仓库根目录执行：
 
 ```bash
-python3 stage3/super_docker.py build
-python3 stage3/super_docker.py up --scene corridor --speed 2
-python3 stage3/super_docker.py inspect
-python3 stage3/super_docker.py view
-python3 stage3/super_docker.py scan
-python3 stage3/super_docker.py verify
+python3 stage3/super/super_docker.py build
+python3 stage3/super/super_docker.py up --scene corridor --speed 2
+python3 stage3/super/super_docker.py inspect
+python3 stage3/super/super_docker.py view
+python3 stage3/super/super_docker.py scan
+python3 stage3/super/super_docker.py verify
 ```
 
-预期打开三个窗口：Gazebo 显示实体飞机和赛道；点云 RViz 保留之前按高度着色的实时雷达回波、飞机和路径；地图 RViz 显示青色 ROG 占据体素（0.2 m）、淡橙色安全膨胀区域、飞机和路径。两个 RViz 各自跟随飞机。ROG-Map 本身就是体素占据地图：内部还区分空闲与未知区域；`/rog_map/occ` 只输出被判为占据的体素中心，`/rog_map/inf_occ` 输出规划用膨胀体素中心。RViz 将这些中心画成方块或淡色点；两个话题来自同一地图，不是两套独立建图算法。实时回波 `/cloud_registered` 每帧更新，已观察到的障碍在 ROG 局部地图中积累；地图随飞机滑动，只保留附近区域。两个 RViz 左边缘的箭头都可展开 Displays 面板；点云窗口使用 `stage3/super_gazebo_cloud.rviz`，只订阅 `/cloud_registered`；地图窗口使用 `stage3/super_gazebo_map.rviz`，只订阅 `/rog_map/occ` 和 `/rog_map/inf_occ`。这使“当前扫描”和“已积累地图”不会叠在同一画面。`view` 只连接已有世界；三个显示容器会由 `view-close` 一并关闭。需要有效的 DISPLAY 与 XAUTHORITY；不修改宿主 xhost 权限。
+预期打开三个窗口：Gazebo 显示实体飞机和赛道；点云 RViz 保留之前按高度着色的实时雷达回波、飞机和路径；地图 RViz 显示青色 ROG 占据体素（0.2 m）、淡橙色安全膨胀区域、飞机和路径。两个 RViz 各自跟随飞机。ROG-Map 本身就是体素占据地图：内部还区分空闲与未知区域；`/rog_map/occ` 只输出被判为占据的体素中心，`/rog_map/inf_occ` 输出规划用膨胀体素中心。RViz 将这些中心画成方块或淡色点；两个话题来自同一地图，不是两套独立建图算法。实时回波 `/cloud_registered` 每帧更新，已观察到的障碍在 ROG 局部地图中积累；地图随飞机滑动，只保留附近区域。两个 RViz 左边缘的箭头都可展开 Displays 面板；点云窗口使用 `stage3/super/super_gazebo_cloud.rviz`，只订阅 `/cloud_registered`；地图窗口使用 `stage3/super/super_gazebo_map.rviz`，只订阅 `/rog_map/occ` 和 `/rog_map/inf_occ`。这使“当前扫描”和“已积累地图”不会叠在同一画面。`view` 只连接已有世界；三个显示容器会由 `view-close` 一并关闭。需要有效的 DISPLAY 与 XAUTHORITY；不修改宿主 xhost 权限。
 
 PC：`up`、`inspect` 显示 ready=true 且世界点云持续到达后，可检查地图确实发布（`view` 开启时也会订阅地图）：
 
@@ -213,11 +214,11 @@ PC 可独立运行高度拟合几何检查：`docker exec -w /lesson/stage3 uav-
 默认 PX4/GNSS 2 m/s 验收完成后，在 PC 冷启动已验证的 5 m/s 配置（FAST-LIO 5 档尚未验收）：
 
 ```bash
-python3 stage3/super_docker.py down
-python3 stage3/super_docker.py up --scene corridor --speed 5 --localization px4
-python3 stage3/super_docker.py inspect
-python3 stage3/super_docker.py view
-python3 stage3/super_docker.py verify
+python3 stage3/super/super_docker.py down
+python3 stage3/super/super_docker.py up --scene corridor --speed 5 --localization px4
+python3 stage3/super/super_docker.py inspect
+python3 stage3/super/super_docker.py view
+python3 stage3/super/super_docker.py verify
 ```
 
 `down` 要求 PX4 已解除解锁，并清理本任务两个显示容器；冷启动新世界后重新执行 `view`，避免 Gazebo GUI 保留旧实体而画面不刷新。未确认落地时保留容器。可在 ROS Docker 请求降落：
@@ -231,7 +232,7 @@ docker exec -e ROS_LOCALHOST_ONLY=0 uav-stage3-ros bash -lc 'source /opt/ros/hum
 
 若失败试飞碰撞后倒在地面，PX4 可能无法确认落地，`down` 会继续拒绝删除。保留失败报告，用 Gazebo 与真值监测确认本任务虚拟飞机已经倒地静止；教师可在 PC 对这个 SITL 容器执行 `docker exec uav-stage3-sitl /opt/px4-gazebo/bin/px4-commander disarm -f` 后再 `down`。这是已发生的仿真碰撞恢复步骤，不计为自动降落通过，也不用于实体无人机。
 
-PC 关闭画面：`python3 stage3/super_docker.py view-close`。若窗口空白，检查同一 Gazebo 分区、ROS 域 10、仿真时钟和 GUI 日志；若实际高度超限、地图不更新或规划超时，先保留报告并降落，再定位坐标/估计器/数据链问题。当前实际通过范围以 [Validation](Validation.md) 为准。
+PC 关闭画面：`python3 stage3/super/super_docker.py view-close`。若窗口空白，检查同一 Gazebo 分区、ROS 域 10、仿真时钟和 GUI 日志；若实际高度超限、地图不更新或规划超时，先保留报告并降落，再定位坐标/估计器/数据链问题。当前实际通过范围以 [Validation](Validation.md) 为准。
 
 局部就绪检查包括 PX4 的姿态、角速度、局部高度、位置、速度有效性和关键故障标志，以及数据/高度新鲜度。外部高度参考时，全局高度可能无效，当前 Auto Loiter 的 preflight 字段不作为局部 Offboard 的唯一前置条件；进入 Offboard 后，解锁命令仍由 PX4 Commander 检查，未设置强制解锁或关闭解锁检查。
 
@@ -241,15 +242,15 @@ PC 关闭画面：`python3 stage3/super_docker.py view-close`。若窗口空白�
 
 走廊 C++ 点云预处理默认启用 `self_filter=true`，按 X500 的保守机体包络剔除回波：base_link FLU 中 x/y 为 ±0.34 m、z 为 -0.235～0.12 m，雷达外参 z=0.135 m。该包络是仿真机型专用近似，更换机型或雷达安装位置必须重新核实。过滤不会恢复遮挡区域，也不会将未知区域标为自由空间；Gazebo 中的机体仍参与雷达遮挡。
 
-PC：确认落地后用现有 `down` 流程关闭实例，再执行 `python3 stage3/super_docker.py up --scene corridor --speed 2 --self-filter off` 可关闭这层过滤；省略开关或指定 `on` 则开启。原有 0.6 m 近距离过滤始终保留，因此 `off` 不代表原始点云包含机体回波。Docker 中 `/tmp/stage3-node-logs/prefilter.log` 每 5 秒记录包络内剔除数，计数发生在距离过滤之前。
+PC：确认落地后用现有 `down` 流程关闭实例，再执行 `python3 stage3/super/super_docker.py up --scene corridor --speed 2 --self-filter off` 可关闭这层过滤；省略开关或指定 `on` 则开启。原有 0.6 m 近距离过滤始终保留，因此 `off` 不代表原始点云包含机体回波。Docker 中 `/tmp/stage3-node-logs/prefilter.log` 每 5 秒记录包络内剔除数，计数发生在距离过滤之前。
 
 场景与速度只需在 `up` 时选择，`inspect`、`verify`、`fault` 自动读取运行容器配置；显式传入不一致参数会报错，不会改变运行配置。`verify` 首先等待数据链（最多 60 秒），再等待 EKF 静止对齐 30 秒，然后发送起飞指令；终端逐步显示当前阶段，等待期间飞机不会起飞。
 
 ### 雷达安装与地面盲区
 
-Stage 3 走廊默认把雷达 link 安装高度从 base_link 上方 0.10 m 提高到 **0.30 m**；扫描原点另有 0.035 m，因此算法外参为 **0.335 m**。增加半径 0.01 m 的实体支架，保留机身、旋翼、支架和雷达外壳的真实遮挡。使用生成的 `stage3/models/x500_super`，不改 Stage 2 的机型；Gazebo GUI 读取 server 的实际模型挂载。点云转换、自体过滤和地面高度估计从运行配置读取同一外参。此前文中的 0.135 m 为原安装位置，现可作对比基线；空场景仍使用 Stage 2 原模型。
+Stage 3 走廊默认把雷达 link 安装高度从 base_link 上方 0.10 m 提高到 **0.30 m**；扫描原点另有 0.035 m，因此算法外参为 **0.335 m**。增加半径 0.01 m 的实体支架，保留机身、旋翼、支架和雷达外壳的真实遮挡。使用生成的 `stage3/super/models/x500_super`，不改 Stage 2 的机型；Gazebo GUI 读取 server 的实际模型挂载。点云转换、自体过滤和地面高度估计从运行配置读取同一外参。此前文中的 0.135 m 为原安装位置，现可作对比基线；空场景仍使用 Stage 2 原模型。
 
-PC：落地后 `down`，然后执行 `python3 stage3/super_docker.py up --scene corridor --speed 2` 使用抬高版本。要比较原高度，启动时加 `--lidar-mount-z 0.10`；允许 0.10～0.60 m，但除 0.10 / 0.30 m 外尚未飞行验收。继续执行 `inspect`、`view`、`verify`，不需要重复这些参数。安装高度变更必须重启世界，不可只修改算法外参。
+PC：落地后 `down`，然后执行 `python3 stage3/super/super_docker.py up --scene corridor --speed 2` 使用抬高版本。要比较原高度，启动时加 `--lidar-mount-z 0.10`；允许 0.10～0.60 m，但除 0.10 / 0.30 m 外尚未飞行验收。继续执行 `inspect`、`view`、`verify`，不需要重复这些参数。安装高度变更必须重启世界，不可只修改算法外参。
 
 单帧实时点云仍会存在机体遮挡；抬高只缩小盲区，没有补点或把未知区域当作自由空间。累积地图的覆盖效果还取决于飞机移动和地图更新。仿真支架质量/惯量为课程近似，实机须重新核实刚性、重心和安装外参，不直接套用。
 
@@ -285,11 +286,11 @@ PC 操作使用上文通用启动与验收命令。默认走廊使用 PX4/GNSS �
 
 ```bash
 # 可选标记对照：FAST-LIO 定位，先执行 lio-build
-python3 stage3/super_docker.py up --scene corridor --speed 2 --localization fastlio --wall-landmarks on
+python3 stage3/super/super_docker.py up --scene corridor --speed 2 --localization fastlio --wall-landmarks on
 # 原始几何的 LIO 退化对照；不能套用带标记的通过结果
-python3 stage3/super_docker.py up --scene corridor --speed 2 --localization fastlio --wall-landmarks off
+python3 stage3/super/super_docker.py up --scene corridor --speed 2 --localization fastlio --wall-landmarks off
 # 默认 PX4 / GNSS 定位；无需附加墙面标记
-python3 stage3/super_docker.py up --scene corridor --speed 2
+python3 stage3/super/super_docker.py up --scene corridor --speed 2
 ```
 
 场景、速度、定位方式只在 up 设置，后续命令读取当前容器配置。默认 PX4/GNSS 使用 900×148 / 30 Hz 瞬时扫描；FAST-LIO 模式目前只支持 corridor + mid360，使用时间分片扫描。各次飞行报告记录实际定位模式，不能混用验证结果。

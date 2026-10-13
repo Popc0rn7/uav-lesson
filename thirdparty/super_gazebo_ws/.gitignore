@@ -1,0 +1,13 @@
+# colcon 核心包与课程雷达节点的构建产物
+/build/
+/install/
+/build-prefilter/
+/install-prefilter/
+/log/
+
+# 本地生成的配置与运行文件
+/course_config.yaml
+__pycache__/
+*.py[cod]
+*.log
+*.pid

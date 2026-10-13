@@ -22,7 +22,7 @@ def main():
     state = dict(odom=0, clouds=0, commands=0, position=None, velocity=None,
                  last_odom=0., last_cloud=0., min_clearance_m=None, peak_speed_mps=0.,
                  path_length_m=0., max_abs_x_m=0., min_z_m=None, max_z_m=None)
-    pcd = Path('/super_ws/src/SUPER/mars_uav_sim/perfect_drone_sim/pcd/corridor_poles_shrubs_medium.pcd')
+    pcd = Path('/super_ws/src/mars_uav_sim/perfect_drone_sim/pcd/corridor_poles_shrubs_medium.pcd')
     with pcd.open() as stream:
         for line in stream:
             if line.strip() == 'DATA ascii':

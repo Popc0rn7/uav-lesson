@@ -6,7 +6,7 @@ from pathlib import Path
 import subprocess
 import time
 
-ROOT=Path(__file__).resolve().parents[1]
+ROOT=Path(__file__).resolve().parents[2]
 WS=ROOT/'thirdparty/super_gazebo_ws'
 
 
@@ -47,10 +47,11 @@ def main(close=False,image='px4io/px4-sitl-gazebo:latest'):
         run('docker','run','-d','--init','--name',name,*shared,
             '--tmpfs','/.rviz2:uid=1000,gid=1000',
             '--mount',f'type=bind,source={WS},target=/super_ws,readonly',
-            '-e','FASTRTPS_DEFAULT_PROFILES_FILE=/lesson/stage3/race_view_dds.xml',
+            '--mount',f'type=bind,source={ROOT}/submodules/SUPER,target=/super_ws/src,readonly',
+            '-e','FASTRTPS_DEFAULT_PROFILES_FILE=/lesson/stage3/super/race_view_dds.xml',
             '--entrypoint','bash',ros_image,'-lc',
             'source /opt/ros/humble/setup.bash; source /super_ws/install/local_setup.bash; '
-            f'exec rviz2 -d /lesson/stage3/{config} --ros-args -r __node:={node} -p use_sim_time:=true')
+            f'exec rviz2 -d /lesson/stage3/super/{config} --ros-args -r __node:={node} -p use_sim_time:=true')
     for _ in range(15):
         result=subprocess.run(['docker','exec',names[0],'gz','service','-s','/gui/follow',
             '--reqtype','gz.msgs.StringMsg','--reptype','gz.msgs.Boolean','--timeout','500',

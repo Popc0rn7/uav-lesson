@@ -1,45 +1,115 @@
 # develop：双 Docker 开发环境
 
-开发统一采用两个运行角色：Docker 1 运行 PX4＋Gazebo，Docker 2 运行 ROS 2 Humble 和算力侧应用。进入板端阶段时，RoboPi 替代 Docker 2，Docker 1 继续提供飞控和仿真。QGC、可视化、评测与教师工具留在 PC。
+开发统一采用两个运行角色：Docker 1 运行 PX4＋Gazebo，Docker 2 运行 ROS 2 Humble 和算力侧应用。
+进入板端阶段时，RoboPi 替代 Docker 2，Docker 1 继续提供飞控和仿真。
+QGC、可视化、评测与教师工具留在 PC。
 
-两个基线镜像只提供环境。课程开发的交付单位是**模块及其组合成的实验**：实验固定场景、传感器、算法、控制、任务、资源和验收条件，镜像负责这些模块的运行依赖。Stage 是课堂组织方式，不作为算法间的依赖边界。
+两个基线镜像只提供环境。使用时的镜像边界是：镜像负责模块的运行依赖，文件挂载、脚本运行、环境变量不持久到镜像。
 
 ## 目录与复用范围
 
-- `docker/`：通用算力镜像 Dockerfile、环境入口与离线自检。
+- `docker/`：Docker 2 适配版的通用算力镜像 Dockerfile、环境入口与离线自检。
 - `profiles/`：实验模块组合、启动参数、共享资源与验收证据。
 - `lesson.py`：PC 统一命令入口，目前委托 Stage 3 后端执行。
-- `../stageN/`：各阶段的代码、配置、模型与启动脚本；尚未迁移到此目录。
-- `../thirdparty/`：上游算法源码和本地编译产物，忽略 Git，通过挂载接入容器。
+- `../stage3/super/`：课程启动、传感器/PX4 适配、场景、配置与验收。
+- `../submodules/SUPER/`：SUPER fork，核心修改在 `feat/sim` 开发。
+- `../thirdparty/`：本地编译产物，忽略 Git，通过挂载接入容器。
 
-Stage 1–3 计划复用两个容器角色，按实验选择挂载和启动节点。当前只有 SUPER 走廊配置接入此入口。Stage 1 聊天可不启动仿真容器，OpenHarmony/Houmo 推理产物仍在 RoboPi；Stage 2 的传感器展示还使用原入口。基础镜像提供运行依赖，容器是运行实例，挂载把 PC 文件映射进容器；修改挂载源码不必重建镜像，修改 Dockerfile 则需重建镜像，并在确认落地后重建运行容器。
+Stage 1-3 目前都计划基于这两个 image，通过挂载不同的文件实现功能。
 
-## 模块边界与已有实现
+## Stage 3 模块边界与挂载
 
-| 模块 | 职责与运行位置 | 当前代码 | 迁移到 RoboPi 的处理 |
-| --- | --- | --- | --- |
-| 仿真资产 | Docker 1：飞控、整机模型、雷达模型、世界 | `stage2/models/`、`stage3/generate_gazebo_corridor.py`、`stage3/px4_start.sh` | 留在 PC |
-| 仿真传感器接入 | 将 Gazebo 扫描、IMU、时钟转换为算法输入；开发期在 Docker 2 | `stage3/ros_src/stage3_lidar/`、`stage3/super_imu.py`、`run_super_nodes.sh` 的 ros_gz_bridge | 板端不默认安装 Gazebo；先在 PC 接入，再通过以太网 ROS 传输；实机改用设备驱动 |
-| 定位与输入适配 | Docker 2：FAST-LIO2、点云坐标转换、外参和里程计 | `prepare_lio.py`、`fast_lio_gazebo.yaml`、`lio_bridge.py`、`lio_geometry.py` | 算法及消息依赖重新构建；保持输入接口与时间语义 |
-| 规划 | Docker 2：地图与轨迹生成 | SUPER 上游工作区、`super_*.yaml`、`patch_super_height.py` | 重新构建核心和依赖；GCOPTER 仍待接入统一实验 |
-| 控制与监督 | Docker 2：飞行状态、轨迹约束、ENU/FLU ↔ NED/FRD、失流处理 | `super_px4.py`，当前还含任务逻辑 | 保持控制协议，重新验证消息 ABI、DDS、墙钟超时及降落 |
-| 任务 | Docker 2：起飞、目标序列、返程 | 当前分散在 `super_px4.py` 与验收脚本 | 后续从控制桥提取；任务通过受约束接口提交目标 |
-| 评测与可视化 | PC：真值、成功判据、故障注入、Gazebo/RViz/Web | `verify_super_*.py`、`check_*.py`、`super_gazebo_view.py`、`stage2/show_*.sh` | 留在 PC；真值不得成为板端定位或控制输入 |
-| 模型应用 | 算力侧：聊天、后续视觉或语义任务 | `stage1/robopi/`、`stage3/jev.py` | Stage 1 有独立运行依赖；Jev 目前只有文本示例，尚未接入飞行 |
+以下按当前 SUPER＋PX4/GNSS、无墙面标记的 corridor 主流程说明。路径以 PC 仓库根目录为基准；挂载文件仍保存在 PC，由对应容器读取和执行。
 
-这是对已有实现的职责映射。当前节点尚未全部拆成独立模块，尤其控制与任务仍耦合。新增功能按此边界组织；不为了目录整齐一次性搬动全部已验收代码。
+### Docker 1：PX4 与 Gazebo
 
-## 三层配置与交付
+容器 `uav-stage3-sitl` 使用 PX4/Gazebo 镜像。以下挂载全部只读：
 
-1. **环境**：Docker 1 的 PX4/Gazebo 镜像；Docker 2 的 Humble 基础环境、模块依赖和开发工具。固定镜像摘要、架构、上游版本和补丁，课前完成下载与构建。
-2. **模块**：声明输入输出消息、坐标系、单位、QoS、时间源、依赖、参数、启动方式、停止方式和异常行为。只有算法模块不应直接依赖 Gazebo 或 HDC；这些依赖放到适配或部署层。
-3. **实验配置**：组合模块并固定场景、传感器、速度、资源和证据。一次实验使用一种算力后端；切到 RoboPi 时替换启动/部署与传感器传输适配，不把 Linux install 目录复制上板。
+| PC 文件或目录 | 容器内位置 | 用途 |
+| --- | --- | --- |
+| `stage3/super/worlds/corridor.sdf` | `/opt/px4-gazebo/share/gz/worlds/corridor.sdf` | 生成的实体走廊场景 |
+| `stage3/super/models/x500_super/` | `/opt/px4-gazebo/share/gz/models/x500_experiment/` | 生成的无人机模型，包含课程传感器与接触检测配置 |
+| `stage3/super/models/mid360/` | `/opt/px4-gazebo/share/gz/models/mid360s/` | 生成的仿真雷达模型 |
+| `stage3/super/px4_start.sh` | `/stage3-start.sh` | 启动 PX4、传感器预热和真值监测 |
+| `stage3/super/` | `/lesson-stage3/` | 读取场景布局，执行 `gazebo_warmup.py` 与 `gazebo_monitor.py` |
 
-当前首个配置为 [super-lio-corridor.json](profiles/super-lio-corridor.json)，选取已验收的带墙面标记、2 m/s FAST-LIO2＋SUPER 走廊。配置是现有后端的组合入口，目前只能选择已接入组合，不能任意交换 planner 或并行启动多套。资源仍固定为 ROS 域 10、Gazebo 分区 `uav-stage3`、UDP 8888、HTTP 8096；同一 PC 由一组持有运行权。
+PX4 和 Gazebo 程序来自镜像。场景、整机和雷达模型由 PC 的 `generate_gazebo_corridor.py` 在启动前生成，基础模型来自 `stage2/models/`。默认空场景则直接挂载 Stage 2 的整机和雷达模型，不挂载 corridor 世界文件。Docker 1 的日志和运行状态保存在容器中，真值仅供评测使用。
 
-## 当前可运行入口（PC 仓库根目录）
+### Docker 2：SUPER 与控制适配
 
-只查看配置与启动命令无需 Docker，也不会调用付费 API：
+容器 `uav-stage3-ros` 使用 `uav-computer-ros-humble:local`。运行时有以下三个挂载，全部只读：
+
+| PC 文件或目录 | 容器内位置 | 用途 |
+| --- | --- | --- |
+| 仓库根目录 | `/lesson/` | 执行 `stage3/super/run_super_nodes.sh`、控制桥和传感器适配；读取 SUPER YAML 与 DDS 配置；通过 docker exec 执行检查、飞行验收和故障注入脚本 |
+| `thirdparty/super_gazebo_ws/` | `/super_ws/` | 加载已编译的 SUPER、ROG-Map、消息包与课程雷达节点 |
+| `submodules/SUPER/` | `/super_ws/src/` | 使用 fork 的核心源码，覆盖工作区中的旧源码路径 |
+
+ROS Humble、PX4 消息、XRCE Agent 和 Gazebo 桥来自镜像。运行脚本启动 Agent、时钟/IMU 桥、雷达预处理、点云坐标转换、SUPER 规划器与 `super_px4.py` 控制桥。定位使用 PX4/GNSS 估计位姿。节点日志、算法 CSV 和验收报告写入容器 `/tmp`。
+
+编译使用同一镜像创建临时容器：`/super_ws` 挂载改为可写，`/lesson` 仍只读，并通过 `--user` 指定 PC 用户的 UID/GID。`colcon build` 在容器内执行，产物保存回 PC 的 `thirdparty/super_gazebo_ws/`。
+
+### 留在 PC 的入口与工具
+
+- `develop/lesson.py`、`stage3/super/super_docker.py`：组织镜像构建、容器启动、检查和清理。
+- `prepare_super.py`、`generate_gazebo_corridor.py`：初始化 submodule 和生成仿真资产。
+- `check_gazebo_scan.py`、`check_gazebo_contact.py`：从 PC 查询仿真真值服务，输出诊断报告。
+- QGroundControl 和 `super_gazebo_view.py`：在 PC 查看飞行与地图。view 入口另外创建 Gazebo GUI、点云 RViz、地图 RViz 三个容器，通过桌面 socket 与授权文件显示窗口。
+- 仓库源码、场景配置和 `thirdparty/` 编译产物：保存在 PC；容器内 `/tmp` 报告需要在删除容器前按 Hands-on 导出。
+
+飞行验收脚本 `verify_super_*.py` 和故障注入脚本 `check_super_fault.py` 当前在 Docker 2 内执行，由 PC 入口调用。
+
+## Stage 3 SUPER 开发流程
+
+SUPER 的脚本、配置、ROS 包和测试集中在 `stage3/super/`。核心源码来自 `submodules/SUPER/`，算法编译产物保存在 `thirdparty/super_gazebo_ws/`，分别挂载供容器使用。
+
+- Docker 1：运行 PX4 与 Gazebo。
+- Docker 2：运行 SUPER、ROG-Map、定位及控制适配节点。
+- 编译：在 Docker 2 镜像创建的临时容器内执行，使用 PC 用户的 UID/GID；产物保存在 PC 工作区。
+- 运行：工作区只读，日志和验收报告写入容器 `/tmp`。修改算法后重新编译；修改 Dockerfile 后重新构建镜像。
+
+### 准备算力镜像
+
+在 **PC 仓库根目录**执行，需要 Docker 权限和可访问的软件源：
+
+```sh
+docker build --network host \
+  --build-arg http_proxy --build-arg https_proxy \
+  -t uav-computer-ros-humble:local develop/docker
+docker run --rm --network none uav-computer-ros-humble:local \
+  python3 /opt/uav/check_runtime.py
+```
+
+成功判据：构建退出码 0，自检输出 `passed=true`。内存不足时添加 `--build-arg BUILD_JOBS=1`。自检只检查镜像依赖，完整启动和飞行需另行验证。
+
+### SUPER 主入口
+
+在 **PC 仓库根目录**执行。前置条件、上游源码准备和 GPU 要求见 [Stage 3 Hands-on](../docs/stage3/Hands-on.md)。新用户使用 `git clone --recurse-submodules` 获取课程和固定版本的 SUPER fork，或在已有 clone 中执行 `git submodule update --init submodules/SUPER`。prepare 只初始化并检查 submodule，build 在 Docker 内编译；不再下载额外 SUPER 副本或应用补丁。核心开发在 submodule 的 `feat/sim`，课程根仓库记录验证过的 commit。
+
+```sh
+python3 stage3/super/super_docker.py prepare
+python3 stage3/super/super_docker.py build
+python3 stage3/super/super_docker.py up --scene corridor
+python3 stage3/super/super_docker.py inspect
+python3 stage3/super/super_docker.py view
+```
+
+默认走廊使用 SUPER＋PX4/GNSS 定位、无附加墙面标记、2 m/s，展示 Gazebo、点云 RViz 和 ROG 地图 RViz 三个窗口。`inspect` 的成功判据为 `ready=true`；就绪后按 Hands-on 执行 verify，验收完整往返与降落。启动失败时保留容器和日志，先检查 inspect 与节点日志，不通过关闭健康检查绕过错误。
+
+```sh
+# 执行飞行验收
+python3 stage3/super/super_docker.py verify
+# 确认落地且 Disarmed 后清理
+python3 stage3/super/super_docker.py down
+```
+
+build 会构建算力镜像和 SUPER 包，内存紧张时加 `--build-jobs 1`。新镜像不会自动更新已有容器；确认落地后 down/up 创建新实例。
+
+### develop 配置入口
+
+`develop/lesson.py` 委托 `stage3/super/super_docker.py` 执行，默认配置为 [super-gnss-corridor.json](profiles/super-gnss-corridor.json)，与 SUPER 主入口统一使用 PX4/GNSS 定位、无附加墙面标记、2 m/s 走廊。
+
+在 **PC 仓库根目录**查看配置与命令，无需启动 Docker：
 
 ```sh
 python3 develop/lesson.py list
@@ -47,36 +117,8 @@ python3 develop/lesson.py plan
 python3 develop/lesson.py up --dry-run
 ```
 
-成功判据：退出码 0，显示模块组合、固定资源以及 `super_docker.py up` 的完整参数。未知配置或缺失故障类型会以非零退出码停止。
+实际运行时可使用同一入口的 prepare、build、up、inspect、scan、view、verify 和 down。`up` 采用配置文件参数；inspect、verify、fault 检查运行容器的实际配置。故障注入按 Hands-on 单独执行。
 
-教师按现有 [Stage 3 准备与运行步骤](../docs/stage3/Hands-on.md)准备上游源码、镜像、构建产物与 GPU。以下入口委托原后端执行，前置条件、飞行判据和排障继续以该文档为准：
+Stage 3 的资源固定为 ROS 域 10、Gazebo 分区 `uav-stage3`、Agent UDP 8888、真值 HTTP 8096；同一 PC 同时只运行一组实例。容器已存在时先 inspect，确认落地后再 down，不从另一工作区关闭当前实验。
 
-```sh
-python3 develop/lesson.py prepare
-python3 develop/lesson.py build
-python3 develop/lesson.py lio-build
-python3 develop/lesson.py up
-python3 develop/lesson.py inspect
-python3 develop/lesson.py scan
-python3 develop/lesson.py view
-python3 develop/lesson.py verify
-# verify 会执行飞行；fault 会注入故障，按现有 Hands-on 单独操作。
-# 确认已落地且 Disarmed 后：
-python3 develop/lesson.py down
-```
-
-内存紧张时，构建入口支持 `build --build-jobs 1` 与 `lio-build --build-jobs 1`。通用镜像独立构建和离线自检见 [教师准备](../docs/stage3/Hands-on.md#教师准备pc)。
-
-`up` 使用所选实验配置；`inspect`、`verify`、`fault` 读取已运行容器的实际配置，由原后端检查。`plan` 描述拟启动实验，不证明当前容器匹配它。容器已存在时入口拒绝覆盖；先 inspect，按原流程落地再 down。构建失败保留输出，不自动拉取其他版本或改用备用算法。
-
-## 下一步按依赖顺序收敛
-
-| 顺序 | 具体工作 | 完成判据 |
-| --- | --- | --- |
-| 1 | 已将快照构建替换为 `develop/docker/Dockerfile`：直接构建 `uav-computer-ros-humble:local`，源码挂载编译；验证状态见 Stage 3 Validation | 镜像和算法编译检查之外，仍需相同实验重新飞行与故障验收 |
-| 2 | 从 `run_super_nodes.sh` 提取传感器接入、定位、规划、控制的独立启动单元；从控制桥提取任务编排 | 原配置行为一致；可单独诊断模块，异常退出仍可被监督器发现 |
-| 3 | 定义共用算法接口并接入 GCOPTER；配置校验拒绝不兼容组合 | 两种 planner 共用输入/控制，固定同一场景、初始状态和预算完成对照 |
-| 4 | 为以太网传输增加 PC 传感器接入模式，构建 OpenHarmony 目标产物，显式设备部署 | Docker 2 停止后，RoboPi 控制同一架仿真机完成起飞、悬停、降落与失联处理 |
-| 5 | 参数化容器、域、分区、所有端口及命名空间，再接入视觉、多机、模型任务 | 完整运行隔离及各实验独立证据，不能仅靠修改容器名宣称隔离 |
-
-板端迁移还需核实 SDK/toolchain、消息版本、Python ABI、目标库及网络条件；本次没有进行板端部署。当前仓库仍依赖本地上游算法源码及其补丁，基础镜像不能单独复现全部成果。实测状态以各阶段 Validation 为准，本框架入口的静态验证不扩大历史验收范围。
+详细操作与排障见 [Hands-on](../docs/stage3/Hands-on.md)，实测和未验收项见 [Validation](../docs/stage3/Validation.md)，开发边界见 [Development](../docs/stage3/Development.md)。

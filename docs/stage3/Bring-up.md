@@ -35,7 +35,7 @@ python3 stage3/check_environment.py
 - `projectairsim_super_adapter/README.md` 和 `scripts/run_click_demo_ros2.sh` 明确使用 Jazzy；核心输入为 `/lidar_slam/odom`、`/cloud_registered`，输出为 `/planning/pos_cmd`，原控制监督器通过 MAVROS 向 PX4 发送设定值。
 - `docs/real_forest_return_validation.zh-CN.md` 记录 2026-09-28 RealForest 去返程通过、Release 编译及相关测试通过；返程曾短暂指令超时。该结果仅属于原机配置，尚未在课程环境复验。
 - `ProjectAirSim -> /home/wqy/ProjectAirSim/`、`dp550_isaacsim -> /home/wqy/dp550_isaacsim/` 在当前 PC 不可解析。旧 AirSim 启动脚本直接依赖前者，不能在本机原样运行；核心 planner 的 CMake 未直接依赖这些链接。接课程 Gazebo 时另写传感器/控制接入，不必为了读取 planner 源码复制外部仿真仓库。
-- `stage3/prepare_super.py` 已改为保留已有 ament 配置，只转换 ROS 1 包；复制时保留软链接、排除原机构建产物。临时副本验证六个包均保留 ROS 2，关键 CMake/package.xml 与来源逐字一致。先前准备的 `thirdparty/super_humble_ws` 是搬入前副本，不作为当前 SUPER 基线。
+- `stage3/super/prepare_super.py` 已改为保留已有 ament 配置，只转换 ROS 1 包；复制时保留软链接、排除原机构建产物。临时副本验证六个包均保留 ROS 2，关键 CMake/package.xml 与来源逐字一致。先前准备的 `thirdparty/super_humble_ws` 是搬入前副本，不作为当前 SUPER 基线。
 
 ## 2. 上游与移植边界
 

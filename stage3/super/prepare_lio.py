@@ -5,7 +5,7 @@ import shutil
 import subprocess
 from patch_lio_forward import apply as patch_forward
 
-ROOT=Path(__file__).resolve().parents[1]
+ROOT=Path(__file__).resolve().parents[2]
 WS=ROOT/'thirdparty/fast_lio_ws'
 SOURCES=[('https://github.com/hku-mars/FAST_LIO.git',WS/'src/FAST_LIO','a4743b095409588842a5b30ddfa27e29d2f99164','ROS2'),
          ('https://github.com/Livox-SDK/livox_ros_driver2.git',ROOT/'thirdparty/livox_driver_source','21445540f0d100dc86a7e6df312dd70bbdb4afdf','master')]
@@ -85,6 +85,8 @@ def main():
         imu_code=imu_code.replace('init_P(21,21) = init_P(22,22) = 0.00001;', 'init_P(21,21) = init_P(22,22) = 1e-7;')
         imu_source.write_text(imu_code)
     patch_forward(WS/'src/FAST_LIO')
+    from patch_runtime_logs import patch as patch_logs
+    patch_logs(lio_source=WS/'src/FAST_LIO')
     # FAST-LIO links the official message types. No SDK/hardware driver is needed
     # to consume simulated CustomMsg; keep the original schemas and license.
     target=WS/'src/livox_ros_driver2';target.mkdir(exist_ok=True)

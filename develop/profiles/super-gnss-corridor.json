@@ -1,21 +1,35 @@
 {
-  "id": "super-lio-corridor",
-  "description": "已验收条件：FAST-LIO2 + SUPER，带墙面标记的 2 m/s 走廊往返",
+  "id": "super-gnss-corridor",
+  "description": "SUPER + PX4/GNSS，无附加墙面标记的 2 m/s 走廊往返",
   "backend": "stage3-super",
   "target": "docker",
   "modules": {
     "simulation": "px4-gazebo",
     "sensor_adapter": "gazebo-mid360-imu",
-    "localization": "fastlio",
+    "localization": "px4",
     "planner": "super",
     "control": "super-px4",
     "mission": "corridor-roundtrip",
     "evaluation": "stage3-corridor"
   },
-  "up_args": ["--scene", "corridor", "--localization", "fastlio", "--lidar", "mid360", "--speed", "2", "--wall-landmarks", "on"],
+  "up_args": [
+    "--scene",
+    "corridor",
+    "--localization",
+    "px4",
+    "--lidar",
+    "mid360",
+    "--speed",
+    "2",
+    "--wall-landmarks",
+    "off"
+  ],
   "resources": {
     "computer_image": "uav-computer-ros-humble:local",
-    "containers": ["uav-stage3-sitl", "uav-stage3-ros"],
+    "containers": [
+      "uav-stage3-sitl",
+      "uav-stage3-ros"
+    ],
     "ros_domain_id": 10,
     "gz_partition": "uav-stage3",
     "xrce_udp_port": 8888,

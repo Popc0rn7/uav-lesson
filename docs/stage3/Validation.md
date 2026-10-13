@@ -24,7 +24,7 @@
 
 - `stage2/models/x500_experiment/model.sdf`：`b72714f3bcea2efa6f6d53d9a7b3e279b362d776e414336832aa4bb0d014a794`。
 - `stage2/models/mid360s/model.sdf`：`ac133716d6bf38e17e41b327316ad3ff832b946be75027ce0776d755e20e011c`。
-- `stage3/super_gazebo.yaml`：`a825e04bd0f448d066dd2589805e11d96229932163dd281be3234e3675f339e6`。
+- `stage3/super/super_gazebo.yaml`：`a825e04bd0f448d066dd2589805e11d96229932163dd281be3234e3675f339e6`。
 
 ## 通过的检查
 
@@ -59,7 +59,7 @@
 
 独立容器 `uav-stage3-race`，ROS 2 Humble / Fast DDS / 域 13 / 系统时间。镜像 `uav-stage3-race:local` 的 ID 为 `sha256:8f77bb2845af22311bd2ff6936e1bc48d4d495d3a33f5b6ef05f6a983772a46b`，从前述本机核心镜像派生；新增 GLFW 3.3.6、GLEW 2.2.0、Xvfb 与 Mesa 软件渲染。验收工具复用基础镜像中的 NumPy、SciPy 1.8.0 和 rclpy。`super_race.py build` 实际执行通过，五包构建完成（mars_quadrotor_msgs、marsim_render、rog_map、perfect_drone_sim、super_planner）。
 
-场景和渲染源来自搬入的 SUPER 工作副本（上述 commit 加用户未提交适配）；中等难度 PCD 为 50,716 点，SHA-256 `2813b62f8377949f1c40657512bff05513ecc76c5cb09e30a2ac3e15bd5b66f1`。上游 perfect_drone_sim、marsim_render 的 package.xml 声明 BSD；仓库未找到顶层许可证文件，整体再分发授权仍需核实。沿用上游 10 m/s quiet 配置，课程配置 `stage3/super_race.yaml` 将地图高度 6→10 m、虚拟天花板 5→6 m，其他规划参数保持。
+场景和渲染源来自搬入的 SUPER 工作副本（上述 commit 加用户未提交适配）；中等难度 PCD 为 50,716 点，SHA-256 `2813b62f8377949f1c40657512bff05513ecc76c5cb09e30a2ac3e15bd5b66f1`。上游 perfect_drone_sim、marsim_render 的 package.xml 声明 BSD；仓库未找到顶层许可证文件，整体再分发授权仍需核实。沿用上游 10 m/s quiet 配置，课程配置 `stage3/super/super_race.yaml` 将地图高度 6→10 m、虚拟天花板 5→6 m，其他规划参数保持。
 
 首次成功完成世界坐标 `(0,-50,1.5)` → `(0,50,1.5)` → 起点，去程 12.151 s、回程 12.260 s（包含到点稳定 1 s），两端误差 0.217945 m；峰值速度 10.01587 m/s，轨迹长度 201.69465 m、最小场景点云净空 1.13395 m。累计收到 3,140 条里程计、335 帧实际渲染雷达点云、2,425 条规划位置指令。末态零速度，passed=true。一次资源快照约 2.11 GiB / 93% 单核 CPU，非峰值或性能预算验收。
 
@@ -117,7 +117,7 @@ PX4 估计终点误差分别为 0.03534 / 0.03583 m（2 档）与 0.06816 / 0.15
 
 补充链路采样：冷启动后 inspect ready=true，独立 8 s 窗口内 PX4 odom / 转换 odom 各 796 条、状态 16 条、预处理扫描与世界点云各 80 帧、控制状态 400 条、clock 1996 条。预处理末帧 24,308 点，世界帧 18,072 点；数量随位置变化。坐标转换与预处理没有降低实际扫描频率。
 
-交付时已重新冷启动 2 m/s 待起飞场景，`inspect ready=true`，8 s 内两种里程计均 800 条、扫描/世界点云/高度均 80 帧、控制状态 400 条、clock 2000 条；PX4 独立检查 `arming_state=1`。Gazebo 与 RViz 两个窗口已打开并逐一截图检查，Gazebo 显示起点实体飞机与走廊，RViz 显示实时扫描及机体标记。最终截图在 `/tmp/stage3-gazebo-ready.png`、`/tmp/stage3-rviz-entities.png`。PC 执行 `python3 stage3/super_docker.py verify --scene corridor --speed 2` 可观看自动往返。
+交付时已重新冷启动 2 m/s 待起飞场景，`inspect ready=true`，8 s 内两种里程计均 800 条、扫描/世界点云/高度均 80 帧、控制状态 400 条、clock 2000 条；PX4 独立检查 `arming_state=1`。Gazebo 与 RViz 两个窗口已打开并逐一截图检查，Gazebo 显示起点实体飞机与走廊，RViz 显示实时扫描及机体标记。最终截图在 `/tmp/stage3-gazebo-ready.png`、`/tmp/stage3-rviz-entities.png`。PC 执行 `python3 stage3/super/super_docker.py verify --scene corridor --speed 2` 可观看自动往返。
 
 待起飞双窗口的一次资源快照：ROS 696.3 MiB / 209.77% CPU，SITL 599.2 MiB / 170.51%，Gazebo GUI 519.1 MiB / 104.65%，RViz 69.79 MiB / 12.59%；CPU 按 100%=一核计算。合计约 1.84 GiB / 4.98 核，不是飞行峰值或最低硬件配置验收。
 

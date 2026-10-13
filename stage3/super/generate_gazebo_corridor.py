@@ -92,7 +92,7 @@ def main():
     worlds.mkdir(exist_ok=True)
     E.ElementTree(sdf).write(worlds / 'corridor.sdf', encoding='utf-8', xml_declaration=True)
 
-    tree = E.parse(ROOT.parent / 'stage2/models/mid360s/model.sdf')
+    tree = E.parse(ROOT.parents[1] / 'stage2/models/mid360s/model.sdf')
     ray = tree.find('.//ray')
     values = {'scan/horizontal/samples':1200, 'scan/horizontal/min_angle':-math.pi,
               'scan/horizontal/max_angle':math.pi-math.radians(.3),
@@ -107,7 +107,7 @@ def main():
     (target/'model.config').write_text('<model><name>SUPER GENERAL_360 on MID360 mount</name><version>1</version><sdf version="1.9">model.sdf</sdf></model>\n')
     # MID-360 FoV and angular raster backing the 200k samples/s MID_360 waveform.
     # Snapshot ray hits do not reproduce hardware firing time or reflectivity.
-    mid=E.parse(ROOT.parent/'stage2/models/mid360s/model.sdf')
+    mid=E.parse(ROOT.parents[1]/'stage2/models/mid360s/model.sdf')
     ray=mid.find('.//ray')
     for path,value in {'scan/horizontal/samples':900,
                        'scan/horizontal/max_angle':math.pi-2*math.pi/900,
@@ -123,7 +123,7 @@ def main():
     mid.write(target/'model.sdf',encoding='utf-8',xml_declaration=True)
     (target/'model.config').write_text('<model><name>MID-360 FoV regular GPU approximation</name><version>1</version><sdf version="1.9">model.sdf</sdf></model>\n')
     # Independent Stage 3 copy; retain Stage 2 model and physical occlusion.
-    vehicle=E.parse(ROOT.parent/'stage2/models/x500_experiment/model.sdf')
+    vehicle=E.parse(ROOT.parents[1]/'stage2/models/x500_experiment/model.sdf')
     if args.temporal_scan:
         # SUPER consumes LiDAR/IMU, not these course extension cameras.
         # Retain geometry and low-rate images; Stage 2 remains at 30 Hz.

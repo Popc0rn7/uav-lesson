@@ -15,11 +15,11 @@ class Mid360Profile(unittest.TestCase):
         # models or depend on untracked output left by a previous Docker run.
         source=Path(__file__).resolve().parents[1]
         with tempfile.TemporaryDirectory() as directory:
-            target=Path(directory)/'stage3';target.mkdir()
+            target=Path(directory)/'stage3/super';target.mkdir(parents=True)
             shutil.copy2(source/'corridor_layout.json',target/'corridor_layout.json')
             for name in ('mid360s','x500_experiment'):
-                model=target.parent/'stage2/models'/name;model.mkdir(parents=True)
-                shutil.copy2(source.parent/'stage2/models'/name/'model.sdf',model/'model.sdf')
+                model=target.parents[1]/'stage2/models'/name;model.mkdir(parents=True)
+                shutil.copy2(source.parents[1]/'stage2/models'/name/'model.sdf',model/'model.sdf')
             for temporal in (False,True):
                 with self.subTest(temporal=temporal), patch.object(generator,'ROOT',target), patch('sys.argv',['generator']+(['--temporal-scan'] if temporal else [])):
                     generator.main()

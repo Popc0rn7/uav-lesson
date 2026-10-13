@@ -9,7 +9,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 PROFILES = Path(__file__).resolve().parent / "profiles"
-ACTIONS = ("prepare", "build", "lio-build", "up", "inspect", "scan",
+ACTIONS = ("prepare", "build", "up", "inspect", "scan",
            "verify", "fault", "contact-check", "view", "view-close", "down")
 
 
@@ -27,7 +27,7 @@ def load_profile(name):
 
 
 def command_for(profile, action, case=None, build_jobs=None, humble_image=None):
-    command = [sys.executable, str(ROOT / "stage3/super_docker.py"), action]
+    command = [sys.executable, str(ROOT / "stage3/super/super_docker.py"), action]
     if action == "up":
         command.extend(profile["up_args"])
     if action == "fault":
@@ -35,8 +35,8 @@ def command_for(profile, action, case=None, build_jobs=None, humble_image=None):
             raise ValueError("fault 需要 --case lidar、planner 或 clock")
         command.extend(["--case", case])
     if build_jobs is not None:
-        if action not in ("build", "lio-build") or build_jobs < 1:
-            raise ValueError("--build-jobs 只用于 build/lio-build，且必须大于 0")
+        if action != "build" or build_jobs < 1:
+            raise ValueError("--build-jobs 只用于 build，且必须大于 0")
         command.extend(["--build-jobs", str(build_jobs)])
     if humble_image is not None:
         if action != "build":
@@ -48,7 +48,7 @@ def command_for(profile, action, case=None, build_jobs=None, humble_image=None):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("action", choices=("list", "plan", *ACTIONS))
-    parser.add_argument("--profile", default="super-lio-corridor")
+    parser.add_argument("--profile", default="super-gnss-corridor")
     parser.add_argument("--case", choices=("lidar", "planner", "clock"))
     parser.add_argument("--dry-run", action="store_true", help="只打印命令，不访问 Docker")
     parser.add_argument("--build-jobs", type=int, help="编译并发数，内存紧张时设为 1")

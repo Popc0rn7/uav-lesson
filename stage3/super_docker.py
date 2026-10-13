@@ -3,15 +3,13 @@
 import argparse
 import os
 from pathlib import Path
-import shutil
 import subprocess
-import tempfile
 
 ROOT=Path(__file__).resolve().parents[1]
 WORKSPACE=ROOT/'thirdparty/super_gazebo_ws'
 ROS='uav-stage3-ros'
 SITL='uav-stage3-sitl'
-IMAGE='uav-stage3-ros:local'
+IMAGE='uav-computer-ros-humble:local'
 
 
 def run(*args, **kwargs):
@@ -34,41 +32,43 @@ def main():
     parser.add_argument('--speed',type=int,choices=[2,5])
     parser.add_argument('--lidar-mount-z',type=float,default=.30,help='走廊雷达 link 相对 base_link 的安装高度（m）')
     parser.add_argument('--self-filter',choices=['on','off'],default='on',help='走廊点云自体回波过滤；不改变实体遮挡')
-    parser.add_argument('--base-container',default='gcopter-humble')
+    parser.add_argument('--humble-image',help='覆盖 Dockerfile 固定的 Humble 基础镜像；教师记录摘要')
+    parser.add_argument('--build-jobs',type=int,default=2,help='镜像与算法编译并发数，内存紧张时设为 1')
     parser.add_argument('--sitl-image',default='px4io/px4-sitl-gazebo:latest')
     args=parser.parse_args()
+    if args.build_jobs < 1:parser.error('build-jobs 必须大于 0')
     if args.action=='prepare':
         run('python3',ROOT/'stage3/prepare_super.py','--gazebo','--destination',WORKSPACE/'src/SUPER')
         return
     run('docker','info','--format','{{.ServerVersion}}')
     if args.action=='lio-build':
         run('python3',ROOT/'stage3/prepare_lio.py')
-        run('docker','build','--network','host','-f',ROOT/'stage3/Dockerfile.lio','-t','uav-stage3-lio:local',ROOT)
-        run('docker','run','--rm','--user',f'{os.getuid()}:{os.getgid()}',
+        run('docker','image','inspect',IMAGE,stdout=subprocess.DEVNULL)
+        run('docker','run','--rm','--network','none','--user',f'{os.getuid()}:{os.getgid()}',
             '--mount',f'type=bind,source={ROOT}/thirdparty/fast_lio_ws,target=/lio_ws',
             '--mount',f'type=bind,source={WORKSPACE},target=/super_ws',
             '--mount',f'type=bind,source={ROOT},target=/lesson,readonly',
-            '-e','CMAKE_BUILD_PARALLEL_LEVEL=2','--entrypoint','bash','uav-stage3-lio:local','-lc',
-            'set -e; source /opt/ros/humble/setup.bash; cd /lio_ws; '
+            '-e',f'CMAKE_BUILD_PARALLEL_LEVEL={args.build_jobs}',
+            '-e',f'MAKEFLAGS=-j{args.build_jobs}','--entrypoint','bash',IMAGE,'-lc',
+            'set -e; source /opt/ros/humble/setup.bash; source /opt/px4_ws/install/local_setup.bash; cd /lio_ws; '
             'colcon build --packages-up-to fast_lio --executor sequential --cmake-args -DCMAKE_BUILD_TYPE=Release; '
             'source /lio_ws/install/local_setup.bash; cd /super_ws; '
-            'colcon build --base-paths /lesson/stage3/ros_src --build-base build-prefilter --install-base install-prefilter --cmake-args -DCMAKE_BUILD_TYPE=Release')
+            'colcon build --base-paths /lesson/stage3/ros_src --build-base build-prefilter --install-base install-prefilter --cmake-force-configure --cmake-args -DCMAKE_BUILD_TYPE=Release')
     elif args.action=='build':
         if not (WORKSPACE/'src/SUPER').is_dir():parser.error('请先 prepare')
         run('python3',ROOT/'stage3/patch_super_height.py')
-        with tempfile.TemporaryDirectory(prefix='uav-stage3-image-') as temp:
-            context=Path(temp)
-            run('docker','commit',args.base_container,'uav-stage3-ros-base:local')
-            run('docker','cp',f'{args.base_container}:/workspace/ros2_ws/install',context/'gcopter_install')
-            shutil.copy2(ROOT/'stage3/Dockerfile.ros',context/'Dockerfile')
-            run('docker','build','-t',IMAGE,context)
+        build_args=['--build-arg',f'HUMBLE_IMAGE={args.humble_image}'] if args.humble_image else []
+        run('docker','build','--network','host','--build-arg','http_proxy','--build-arg','https_proxy',
+            '--build-arg',f'DEV_UID={os.getuid()}','--build-arg',f'DEV_GID={os.getgid()}',
+            '--build-arg',f'BUILD_JOBS={args.build_jobs}',
+            *build_args,'-t',IMAGE,ROOT/'develop/docker')
         # Core build only: no MAVROS, ProjectAirSim, perfect_drone_sim or rendering demo.
         run('docker','run','--rm','--network','none','--user',f'{os.getuid()}:{os.getgid()}',
             '--mount',f'type=bind,source={WORKSPACE},target=/super_ws',
             '--mount',f'type=bind,source={ROOT},target=/lesson,readonly',
-            '-e','CMAKE_BUILD_PARALLEL_LEVEL=2','-e','MAKEFLAGS=-j2',
+            '-e',f'CMAKE_BUILD_PARALLEL_LEVEL={args.build_jobs}','-e',f'MAKEFLAGS=-j{args.build_jobs}',
             '--entrypoint','bash',IMAGE,'-lc',
-            'set -e; source /opt/ros/humble/setup.bash; cd /super_ws; '
+            'set -e; source /opt/ros/humble/setup.bash; source /opt/px4_ws/install/local_setup.bash; cd /super_ws; '
             'colcon build --packages-up-to super_planner --executor sequential '
             '--cmake-args -DCMAKE_BUILD_TYPE=Release; '
             'colcon build --base-paths /lesson/stage3/ros_src --build-base build-prefilter '
@@ -79,7 +79,7 @@ def main():
         args.localization=args.localization or ('fastlio' if args.scene=='corridor' and args.lidar=='mid360' else 'px4')
         use_lio=args.localization=='fastlio'
         args.wall_landmarks=args.wall_landmarks or ('on' if use_lio else 'off')
-        ros_image='uav-stage3-lio:local' if use_lio else IMAGE
+        ros_image=IMAGE
         if use_lio and (args.scene!='corridor' or args.lidar!='mid360'):parser.error('FAST-LIO2 当前只支持 corridor + mid360')
         if use_lio and not (ROOT/'thirdparty/fast_lio_ws/install/local_setup.bash').exists():parser.error('先执行 lio-build')
         if use_lio and not (WORKSPACE/'install-prefilter/stage3_lidar/lib/stage3_lidar/timed_lidar').is_file():parser.error('先执行 lio-build，构建时间分片雷达节点')
@@ -133,7 +133,8 @@ def main():
             '--mount',f'type=bind,source={ROOT},target=/lesson,readonly',
             '--mount',f'type=bind,source={WORKSPACE},target=/super_ws',
             *(['--mount',f'type=bind,source={ROOT}/thirdparty/fast_lio_ws,target=/lio_ws'] if use_lio else []),
-            '-e','FASTRTPS_DEFAULT_PROFILES_FILE=/lesson/stage3/race_view_dds.xml',*ros_extra,ros_image)
+            '-e','FASTRTPS_DEFAULT_PROFILES_FILE=/lesson/stage3/race_view_dds.xml',*ros_extra,
+            ros_image,'bash','/lesson/stage3/run_super_nodes.sh')
     elif args.action=='scan':
         if not exists(ROS):parser.error('运行环境不存在，请先 up')
         env=subprocess.check_output(['docker','inspect',ROS,'--format','{{range .Config.Env}}{{println .}}{{end}}'],text=True)
@@ -161,7 +162,7 @@ def main():
         program='inspect_super.py' if args.action=='inspect' else ('verify_super_corridor.py' if args.scene=='corridor' else 'verify_super_flight.py --fly')
         if args.action=='fault':program=f'check_super_fault.py --case {args.case}'
         run('docker','exec','-e','ROS_LOCALHOST_ONLY=0','-e','ROS_LOG_DIR=/tmp/stage3-ros-logs',ROS,'bash','-lc',
-            'source /opt/ros/humble/setup.bash; source /gcopter_install/local_setup.bash; '
+            'source /opt/ros/humble/setup.bash; source /opt/px4_ws/install/local_setup.bash; '
             'source /super_ws/install/local_setup.bash; '
             'if [ -f /lio_ws/install/local_setup.bash ]; then source /lio_ws/install/local_setup.bash; fi; '
             f'python3 -u /lesson/stage3/{program}')

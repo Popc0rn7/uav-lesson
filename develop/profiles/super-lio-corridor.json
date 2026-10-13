@@ -1,0 +1,25 @@
+{
+  "id": "super-lio-corridor",
+  "description": "已验收条件：FAST-LIO2 + SUPER，带墙面标记的 2 m/s 走廊往返",
+  "backend": "stage3-super",
+  "target": "docker",
+  "modules": {
+    "simulation": "px4-gazebo",
+    "sensor_adapter": "gazebo-mid360-imu",
+    "localization": "fastlio",
+    "planner": "super",
+    "control": "super-px4",
+    "mission": "corridor-roundtrip",
+    "evaluation": "stage3-corridor"
+  },
+  "up_args": ["--scene", "corridor", "--localization", "fastlio", "--lidar", "mid360", "--speed", "2", "--wall-landmarks", "on"],
+  "resources": {
+    "computer_image": "uav-computer-ros-humble:local",
+    "containers": ["uav-stage3-sitl", "uav-stage3-ros"],
+    "ros_domain_id": 10,
+    "gz_partition": "uav-stage3",
+    "xrce_udp_port": 8888,
+    "truth_http_port": 8096
+  },
+  "evidence": "docs/stage3/Validation.md"
+}

@@ -1,11 +1,10 @@
 #!/bin/bash
 set -eo pipefail
 source /opt/ros/humble/setup.bash
-source /gcopter_install/local_setup.bash
+source /opt/px4_ws/install/local_setup.bash
 if [[ -f /lio_ws/install/local_setup.bash ]]; then source /lio_ws/install/local_setup.bash; fi
 source /super_ws/install/local_setup.bash
 if [[ -f /super_ws/install-prefilter/local_setup.bash ]]; then source /super_ws/install-prefilter/local_setup.bash; fi
-export LD_LIBRARY_PATH=/gcopter_install/xrce_agent/lib:${LD_LIBRARY_PATH:-}
 export PYTHONDONTWRITEBYTECODE=1
 export ROS_LOCALHOST_ONLY=0
 export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
@@ -17,7 +16,7 @@ pids=()
 cleanup() { for pid in "${pids[@]}"; do kill -TERM "$pid" 2>/dev/null || true; done; wait || true; }
 trap cleanup EXIT INT TERM
 start() { local name=$1; shift; "$@" > "/tmp/stage3-node-logs/$name.log" 2>&1 & pids+=("$!"); }
-start agent /gcopter_install/xrce_agent/bin/MicroXRCEAgent udp4 -p 8888
+start agent MicroXRCEAgent udp4 -p 8888
 if [[ ${STAGE3_CORRIDOR:-false} == true ]]; then
   start imu ros2 run ros_gz_bridge parameter_bridge '/world/corridor/model/x500_experiment_0/link/super_fcu_imu_link/sensor/super_fcu_imu/imu@sensor_msgs/msg/Imu[gz.msgs.IMU' --ros-args -r /world/corridor/model/x500_experiment_0/link/super_fcu_imu_link/sensor/super_fcu_imu/imu:=/stage3/uav1/imu_raw
   start imu_clean python3 /lesson/stage3/super_imu.py --ros-args -p use_sim_time:=true

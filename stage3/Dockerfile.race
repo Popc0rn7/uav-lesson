@@ -1,4 +1,4 @@
-FROM uav-stage3-ros:local
+FROM uav-computer-ros-humble:local
 USER root
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libglew-dev libglfw3-dev xvfb xauth mesa-utils \

@@ -123,7 +123,7 @@ def main():
                        '-e',f'STAGE3_SELF_FILTER={str(args.self_filter=="on").lower()}',
                        '-e',f'STAGE3_LIDAR_RANGE={69.9 if args.lidar!="mid360s" else 39.9}',
                        '-e',f'STAGE3_CONFIG=/lesson/stage3/super/super_corridor_{args.speed}.yaml',
-                       '-e','SUPER_CENTER_Z_MIN=1.4','-e','SUPER_CENTER_Z_MAX=2.2']
+                       '-e','SUPER_CENTER_Z_MIN=1.4']
         run('docker','run','-d','--init','--name',SITL,'--network','host','--device','/dev/dri/renderD128',*extra,
             '--mount',f'type=bind,source={vehicle},target=/opt/px4-gazebo/share/gz/models/x500_experiment,readonly',
             '--mount',f'type=bind,source={sensor},target=/opt/px4-gazebo/share/gz/models/mid360s,readonly',

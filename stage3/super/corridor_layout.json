@@ -2,9 +2,9 @@
   "source": "SUPER corridor medium, 71298ec + imported modifications",
   "width": 6,
   "length": 100,
-  "wall_height": 4,
+  "wall_height": 8,
   "pole_radius": 0.1,
-  "pole_height": 2.5,
+  "pole_height": 8,
   "shrub_radius": 0.5,
   "shrub_height": 0.35,
   "poles": [
@@ -118,5 +118,6 @@
       0.0,
       75
     ]
-  ]
+  ],
+  "revision": "tall-3d-v1"
 }

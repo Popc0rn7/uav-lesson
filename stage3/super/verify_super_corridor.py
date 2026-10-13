@@ -72,9 +72,18 @@ def main():
             if state['status'].startswith(('track:','planning:','hover:')):
                 report['min_height_m']=height if report['min_height_m'] is None else min(report['min_height_m'],height)
                 report['max_height_m']=height if report['max_height_m'] is None else max(report['max_height_m'],height)
-                if not 1.3<=height<=2.2:raise RuntimeError('Actual flight outside height band: '+str(height))
-        # In the flight layer, cylinders extend above the aircraft and shrubs stay below it.
-        clearance=min(3-abs(gt[0]),*[math.hypot(gt[0]-x,gt[1]-y)-.1 for x,y in layout['poles']])
+                if not .35<=height<=12.:raise RuntimeError('Actual flight outside scene envelope: '+str(height))
+        # Distance to finite 3D solids; climbing above a pole is not an automatic failure.
+        def box_distance(center, size):
+            return math.sqrt(sum(max(abs(gt[i]-center[i])-size[i]/2,0.)**2 for i in range(3)))
+        def cylinder_distance(x, y, radius, height):
+            radial=max(math.hypot(gt[0]-x,gt[1]-y)-radius,0.)
+            vertical=max(-gt[2],gt[2]-height,0.)
+            return math.hypot(radial,vertical)
+        clearance=min(max(gt[2],0.),
+                      *(box_distance([x,50,layout['wall_height']/2],[.2,100,layout['wall_height']]) for x in (-3.1,3.1)),
+                      *(cylinder_distance(x,y,layout['pole_radius'],layout['pole_height']) for x,y in layout['poles']),
+                      *(cylinder_distance(x,y,layout['shrub_radius'],layout['shrub_height']) for x,y in layout['shrubs']))
         if landmarks:
             for center in landmarks['centers']:
                 distance=math.sqrt(sum(max(abs(gt[i]-center[i])-landmarks['size'][i]/2,0)**2 for i in range(3)))
@@ -143,6 +152,15 @@ def main():
                 wait(lambda:state['vehicle'].arming_state!=state['vehicle'].ARMING_STATE_ARMED,60)
                 report['landing_disarmed']=True
             except Exception as exc:report['landing_error']=str(exc)
+        try:
+            final_truth=monitor()
+            report['final_contact_count']=len(final_truth['contacts'])
+            if final_truth['contacts']:
+                report['last_contact']=final_truth['contacts'][-1]
+                report.setdefault('error','Gazebo contact during flight or landing')
+        except Exception as exc:
+            report['final_contact_check_error']=str(exc)
+            report.setdefault('error','Final contact check unavailable')
         report['passed']=len(report['legs'])==2 and report.get('landing_disarmed',False) and 'error' not in report
         report['final_status']=state['status']
         out=Path('/tmp/stage3-corridor');out.mkdir(exist_ok=True)

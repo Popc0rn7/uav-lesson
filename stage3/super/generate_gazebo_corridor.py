@@ -75,9 +75,9 @@ def main():
 
     model('ground', [0,50,-.1], ('box', {'size':'40 140 .2'}), '.32 .36 .3 1', False)
     for x, name in ((-3.1,'wall_left'), (3.1,'wall_right')):
-        model(name, [x,50,2], ('box', {'size':'.2 100 4'}), '.7 .72 .76 1')
+        model(name, [x,50,layout['wall_height']/2], ('box', {'size':f".2 100 {layout['wall_height']}"}), '.7 .72 .76 1')
     for i, (x,y) in enumerate(layout['poles']):
-        model(f'pole_{i}', [x,y,1.25], ('cylinder', {'radius':.1,'length':2.5}), '.9 .35 .1 1')
+        model(f'pole_{i}', [x,y,layout['pole_height']/2], ('cylinder', {'radius':layout['pole_radius'],'length':layout['pole_height']}), '.9 .35 .1 1')
     # Same centres and envelope; closed cylinders approximate the original irregular PCD shrubs.
     for i, (x,y) in enumerate(layout['shrubs']):
         model(f'shrub_{i}', [x,y,.175], ('cylinder', {'radius':.5,'length':.35}), '.1 .55 .18 1')

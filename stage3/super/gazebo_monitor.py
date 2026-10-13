@@ -71,10 +71,10 @@ if __name__ == '__main__':
     node.subscribe(Pose_V,f'/world/{world}/dynamic_pose/info',pose)
     node.subscribe(WorldStatistics,f'/world/{world}/stats',stats)
     node.subscribe(PointCloudPacked,'/mid360s/scan/points',scan)
-    layout=json.loads(Path('/lesson-stage3/super/corridor_layout.json').read_text())
+    layout=json.loads(Path('/lesson-stage3/corridor_layout.json').read_text())
     names=['wall_left','wall_right']+[f'pole_{i}' for i in range(len(layout['poles']))]+[f'shrub_{i}' for i in range(len(layout['shrubs']))]
     if os.environ.get('STAGE3_WALL_LANDMARKS')=='true':
-        landmarks=json.loads(Path('/lesson-stage3/super/lio_landmarks.json').read_text())
+        landmarks=json.loads(Path('/lesson-stage3/lio_landmarks.json').read_text())
         names.extend(f'lio_landmark_{i}' for i in range(len(landmarks['centers'])))
     for name in names:
         # Harmonic Contact system publishes its scoped topic (ignores sensor/topic).

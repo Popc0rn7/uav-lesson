@@ -202,8 +202,7 @@ class Bridge(Node):
         p=msg.pose.position
         if self.mode != 'hover' or msg.header.frame_id != 'world' or not all(math.isfinite(x) for x in (p.x,p.y,p.z)):
             return
-        bounds = (abs(p.x)<=2.5 and -.5<=p.y<=100.5 and 1.4<=p.z<=2.1) if self.corridor else (abs(p.x)<=10 and abs(p.y)<=10 and .5<=p.z<=5)
-        if self.corridor:bounds=bounds and abs(p.z-self.takeoff_height)<.001
+        bounds = (abs(p.x)<=2.5 and -.5<=p.y<=100.5 and .5<=p.z<=12.0) if self.corridor else (abs(p.x)<=10 and abs(p.y)<=10 and .5<=p.z<=5)
         if not bounds or time.monotonic()-self.cloud_at>.5:
             self.reason='goal rejected: bounds or stale lidar'
             return
@@ -220,18 +219,13 @@ class Bridge(Node):
         p,v,a=[[float(getattr(vector,k)) for k in ('x','y','z')] for vector in (msg.position,msg.velocity,msg.acceleration)]
         age=self.get_clock().now().nanoseconds/1e9-(msg.header.stamp.sec+msg.header.stamp.nanosec/1e9)
         valid=all(math.isfinite(x) for x in p+v+a) and -.05<=age<=.3
-        # Auxiliary Z must remain below the 2.5 m poles; execution uses the
-        # independent altitude reference. Allow the optimizer's soft margins.
-        planner_z=p[2]
-        bounds = (abs(p[0])<=2.5 and -1<=p[1]<=101 and 1.2<=p[2]<=2.4) if self.corridor else (abs(p[0])<=10 and abs(p[1])<=10 and .2<=p[2]<=5)
+        # Preserve the full SUPER trajectory, including vertical feedforward.
+        bounds = (abs(p[0])<=2.5 and -1<=p[1]<=101 and .2<=p[2]<=12.0) if self.corridor else (abs(p[0])<=10 and abs(p[1])<=10 and .2<=p[2]<=5)
         valid=valid and bounds
-        if self.corridor:
-            p=[p[0],p[1],self.takeoff_height];v=[v[0],v[1],0.];a=[a[0],a[1],0.]
-            valid=valid and 1.3<=p[2]<=2.2
         valid=valid and math.dist(v,[0,0,0])<=self.speed_limit and math.dist(a,[0,0,0])<=6.
         valid=valid and self.p is not None and math.dist(p,self.p)<=3.
         if not valid:
-            self.land(f'SUPER command rejected: p={p}, v={v}, a={a}, planner_z={planner_z}, age={age:.4f}, error={math.dist(p,self.p) if self.p else -1:.3f}'); return
+            self.land(f'SUPER command rejected: p={p}, v={v}, a={a}, age={age:.4f}, error={math.dist(p,self.p) if self.p else -1:.3f}'); return
         self.sample,self.sample_at=(p,v,a),time.monotonic()
         self.mode,self.reason='track','tracking SUPER'
 
@@ -249,7 +243,7 @@ class Bridge(Node):
         if active and (wall-self.odom_at>.5 or wall-self.status_at>1.5 or wall-self.clock_at>.5):
             self.land('state or clock timeout');active=False
         if active and self.corridor and self.height_required and wall-self.height_at>.5:
-            self.land('planner or lidar timeout');active=False
+            self.land('lidar height timeout');active=False
         if active and self.corridor and not self.ready():
             self.land('local estimate unavailable');active=False
         if active and self.mode not in ('prestream','takeoff') and self.vehicle.nav_state!=self.vehicle.NAVIGATION_STATE_OFFBOARD:
@@ -269,8 +263,10 @@ class Bridge(Node):
             else:self.stable=None
         if self.mode=='planning' and wall-self.started>10:
             self.land('planning timeout');active=False
-        if self.mode=='track' and (wall-self.sample_at>.5 or wall-self.cloud_at>.5):
-            self.land('planner or lidar timeout');active=False
+        if self.mode=='track' and wall-self.sample_at>.5:
+            self.land('SUPER command timeout');active=False
+        if self.mode=='track' and wall-self.cloud_at>.5:
+            self.land('lidar cloud timeout');active=False
         if self.mode=='track' and self.goal and self.p:
             if math.dist(self.p,self.goal)<.3 and math.dist(self.v,[0.,0.,0.])<.3:
                 self.goal_stable=self.goal_stable or wall

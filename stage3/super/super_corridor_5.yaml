@@ -101,14 +101,15 @@ rog_map:
   map_size:
   - 30
   - 30
-  - 10
+  - 20
   fix_map_origin:
   - 0
   - 0
   - 1.5
   frontier_extraction_en: false
-  virtual_ceil_height: 6.0
-  virtual_ground_height: -1.0
+  virtual_ceil_height: 12.0
+  # Compensate ROG inflation + corridor robot_r; physical centre floor is 1.4 m (robot_r + shrubs + margin).
+  virtual_ground_height: -2.4
   load_pcd_en: false
   map_sliding:
     enable: true

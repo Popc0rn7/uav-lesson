@@ -169,7 +169,7 @@ python3 stage3/super/super_race.py view
 
 ## Gazebo 实体走廊与三窗口（PC）
 
-此入口将中等 corridor 的墙、18 根立柱和 9 个灌木实体化；地面、障碍均有碰撞几何。走廊长 100 m、净宽 6 m，侧墙高 4 m；立柱半径 0.1 m、高 2.5 m，灌木用半径 0.5 m、高 0.35 m 的圆柱近似。坐标为 ENU，原场景 y∈[-50,50] 平移为 [0,100]。原 `perfect_drone_sim` 入口继续保留。
+此入口将中等 corridor 的墙、18 根立柱和 9 个灌木实体化；地面、障碍均有碰撞几何。走廊长 100 m、净宽 6 m，侧墙高 8 m；立柱半径 0.1 m、高 8 m，灌木用半径 0.5 m、高 0.35 m 的圆柱近似。坐标为 ENU，原场景 y∈[-50,50] 平移为 [0,100]。原 `perfect_drone_sim` 入口继续保留。
 
 前置条件：先完成上文教师准备与核心构建，PC 有 Docker 权限、GPU renderD128 和图形桌面。新 C++ 预处理包也由 `build` 构建；依赖 Gazebo transport 13 / msgs 10，工作空间含匹配当前 PX4 的消息包。首次准备属于教师流程。
 
@@ -207,7 +207,9 @@ PC 可独立运行高度拟合几何检查：`docker exec -w /lesson/stage3 uav-
 
 默认 PX4/GNSS 数据链为 Gazebo GPU 实体扫描 → Gazebo transport C++ 距离过滤/10 cm 体素 → ROS 雷达帧 → PX4 估计姿态与安装外参转换 → `/cloud_registered` → ROG-Map/SUPER → PX4 Offboard。规划器没有读取 PCD 或 Gazebo 真值。旧 `--lidar super360` 平坦走廊模式增加雷达地面平面拟合：48 次确定性 RANSAC、最多 1200 点的候选样本、2.5 cm 内点门限，要求地面占候选点至少 45%，再以 SVD 精化。安装偏移修正后得到机体离地高度，通过 `/fmu/in/vehicle_visual_odometry` 的 NED Z 交给 PX4；不融合该消息的 XY、速度或姿态。设置 `EKF2_EV_CTRL=2`、`EKF2_HGT_REF=3`、`EKF2_EVP_NOISE=0.05`、`EKF2_GPS_P_NOISE=0.05`、`EKF2_BARO_CTRL=0`，GNSS 继续提供水平定位与速度。接口配置依据 [PX4 EKF 文档](https://docs.px4.io/v1.18/en/advanced_config/tuning_the_ecl_ekf)。这仅是平坦地面的高度辅助，不是完整 LIO；坡地、台阶、地面被遮挡及实际 MID-360 扫描均需另行验证。高度拟合失败或超过 0.5 s 未更新时请求降落，参数不能直接当作板端基线。`world` 为课程 ENU，`base_link` 为机体 FLU，`mid360s_sensor` 的 base 外参 z=0.135 m；PX4 输入输出为 NED/FRD。里程计以 PX4 sample 时间戳发布；雷达保留 Gazebo 时间戳，姿态配对误差最多 50 ms。里程计 twist 沿用 SUPER 接口的世界坐标速度约定。
 
-`verify` 等待控制状态 `idle: local_ready` 与点云，然后等待估计器静止收敛，起飞到 1.95 m，飞到 `(0,100,1.95)` 并返回 `(0,0,1.95)`，最后降落并解除解锁。每端所选定位输出与 Gazebo 真值位置误差均 <0.3 m、速度均 <0.3 m/s 连续 2 s；Gazebo 实际机体高度必须为 1.3–2.2 m，中心到实体边界净空至少 0.35 m，无障碍接触。参考指令还有范围、速度、加速度与新鲜度检查；数据或规划超时请求降落。真值 HTTP 8096 仅供验收。1.95 m 是课程为本走廊选择的固定飞行层，不是 PX4 的能力限制；PX4 Offboard 接口支持三维位置、速度、加速度。该实体赛道的立柱和侧墙在飞行层具有相同水平截面，当前控制桥执行 SUPER 的 XY 位置/速度/加速度，并独立保持 1.95 m 高度（Z 速度与加速度参考为零）；原始规划指令仍校验范围、动态限制和新鲜度。此投影仅适用于本赛道，不能直接用于有悬空障碍或分层通道的场景。RViz 的 SUPER/备用轨迹是规划辅助轨迹，橙色实际路径反映真实水平飞行；最终执行参考另发布在 `/stage3/uav1/reference`。
+`verify` 等待控制状态 `idle: local_ready` 与点云，然后等待估计器静止收敛，起飞到 1.95 m，飞到 `(0,100,1.95)` 并返回 `(0,0,1.95)`，最后降落并解除解锁。每端所选定位输出与 Gazebo 真值位置误差均 <0.3 m、速度均 <0.3 m/s 连续 2 s；Gazebo 实际机体高度须在场景外层安全范围 0.35–12 m 内，中心到地面、有限高度墙体、立柱、灌木与可选标记的三维实体净空至少 0.35 m，无障碍接触。控制桥完整执行 SUPER 的 XYZ 位置、速度、加速度，保留速度、加速度、跟踪距离和新鲜度检查；数据或规划超时请求降落。真值 HTTP 8096 仅供验收。1.95 m 仅为起飞和往返终点高度，途中允许升降。移除了原 1.4–2.2 m 窄高度带；SUPER_CENTER_Z_MIN=1.4 只约束地面/灌木的中心净空（1 m 规划半径＋0.35 m 灌木＋余量），未设置柱顶中心高度上限，ROG 虚拟地面/天花板为 −2.4/12 m，垂直局部地图尺寸为 20 m；控制桥目标高度范围 0.5–12 m、指令范围 0.2–12 m。场景没有实体顶棚，柱顶越过不作为失败条件。规划和实际执行参考分别为 `/planning/pos_cmd` 与 `/stage3/uav1/reference`。本次加高场景与完整 XYZ 执行已完成 2 m/s 一次冷启动往返；5 m/s 未通过，当前使用 2 档。历史固定高度结果不适用于新配置，具体证据及高速失败边界见 Validation。
+
+PC 应在落地并停止旧实例后重新执行 `python3 stage3/super/super_docker.py up --scene corridor --speed 2`（已有容器先执行 `down`），启动会重新生成加高的实体地图；随后执行 `inspect`、`view`、`verify`。预期墙体和柱子均为 8 m，飞机从 1.95 m 起飞，途中参考高度可随规划变化。若旧世界仍显示矮柱，确认已重建实例；若命令被拒绝或发生降落，保留控制桥原因和验收报告，检查三维动态限制、跟踪距离与定位健康。
 
 通过条件为 JSON 中 `passed=true`，不能仅凭看到飞机运动认定通过。ROS Docker 中结果为 `/tmp/stage3-corridor/result-2.json`，逐帧记录为 `trajectory-2.csv`；PC 扫描结果为 `/tmp/stage3-gazebo-scan.json`。扫描检查持续 60 s，要求达到启动配置标称扫描率的 90%（FAST-LIO 查询载体 ≥54 Hz；PX4 MID-360 对照 ≥27 Hz；旧对照 ≥9 Hz）、平均实时率 ≥0.8、最大帧间隔 ≤0.5 s。检查期间不要重启仿真。
 

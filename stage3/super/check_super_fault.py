@@ -95,7 +95,8 @@ def main():
         report['landing_height_m']=truth['pose'][2] if truth['pose'] is not None else None
         # Pausing physics stops clock, odometry and lidar together. The first
         # freshness watchdog to expire depends on their latest sample times.
-        expected=('state or clock timeout','planner or lidar timeout') if args.case=='clock' or persistent else ('planner or lidar timeout',)
+        flow_timeouts=('SUPER command timeout','lidar cloud timeout','lidar height timeout')
+        expected=('state or clock timeout',)+flow_timeouts if args.case=='clock' or persistent else flow_timeouts
         report['passed']=(any(reason in report['failure_status'] for reason in expected) and report['response_s']<3
                           and not report['contact_count'] and report['landing_height_m'] is not None
                           and report['landing_height_m']<.4 and time.monotonic()-truth['pose_at']<.5

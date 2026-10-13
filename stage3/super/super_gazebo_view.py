@@ -52,6 +52,8 @@ def main(close=False,image='px4io/px4-sitl-gazebo:latest'):
             '--entrypoint','bash',ros_image,'-lc',
             'source /opt/ros/humble/setup.bash; source /super_ws/install/local_setup.bash; '
             f'exec rviz2 -d /lesson/stage3/super/{config} --ros-args -r __node:={node} -p use_sim_time:=true')
+    from view_layout import apply_layout
+    apply_layout()
     for _ in range(15):
         result=subprocess.run(['docker','exec',names[0],'gz','service','-s','/gui/follow',
             '--reqtype','gz.msgs.StringMsg','--reptype','gz.msgs.Boolean','--timeout','500',

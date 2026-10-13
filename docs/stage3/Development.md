@@ -2,6 +2,8 @@
 
 操作只维护在 [Hands-on](Hands-on.md)，实测与失败边界维护在 [Validation](Validation.md)，上游来源与迁移边界见 [Bring-up](Bring-up.md)。
 
+后续构建收敛：算力环境改为 `develop/docker/Dockerfile` 直接构建 `uav-computer-ros-humble:local`，不再依赖 `gcopter-humble`。新镜像、算法编译、离线依赖和只读 DDS 检查已通过；完整新实例飞行与故障测试尚未复验，历史飞行证据不自动转移到新镜像。
+
 ## 当前交付
 
 - SUPER 的 ROS 2 Humble 核心、perfect_drone_sim 竞速入口，以及 PX4/Gazebo 实体走廊入口。
@@ -17,7 +19,7 @@
 
 | 工作区域 | 主要文件 | 交接约定 |
 | --- | --- | --- |
-| 统一运行入口 | stage3/super_docker.py、super_gazebo_view.py、Dockerfile.* | 修改默认配置或运行方式时同步 Hands-on |
+| 统一运行入口 | develop/docker/、stage3/super_docker.py、super_gazebo_view.py、Dockerfile.race | 修改默认配置或运行方式时同步 Hands-on |
 | 场景与传感器 | generate_gazebo_corridor.py、corridor_layout.json、lio_landmarks.json、px4_start.sh、gazebo_warmup.py | 场景变化须独立标记评测条件 |
 | LiDAR / IMU / LIO | ros_src/stage3_lidar/、super_imu.py、prepare_lio.py、patch_lio_forward.py、fast_lio_gazebo.yaml、lio_bridge.py、lio_geometry.py | 维持时间、坐标系、外参、QoS 与失流语义 |
 | SUPER / PX4 控制 | prepare_super.py、patch_super_height.py、super_px4.py、super_*.yaml | 更改控制链后必须重新实际飞行验收 |
@@ -39,7 +41,7 @@ thirdparty/ 保存上游检出、消息包和 build/install，artifacts/ 保存�
 | 容器 | uav-stage3-ros、uav-stage3-sitl、uav-stage3-gazebo-view、uav-stage3-rviz-view、uav-stage3-rviz-map-view |
 | ROS 域 / Gazebo 分区 | 10 / uav-stage3 |
 | XRCE Agent UDP / 真值 HTTP | 8888 / 8096 |
-| 镜像标签 | uav-stage3-ros:local、uav-stage3-lio:local |
+| 镜像标签 | uav-computer-ros-humble:local（统一依赖镜像，算法在挂载工作区编译） |
 
 当前脚本尚未参数化全部资源，因此同一 PC 上主 demo 由一组持有运行权。其他组可并行编辑、静态检查与运行不访问共享仿真的单元测试；需要同时跑多套时，另行实现容器名、域、分区、端口与评测 URL 的完整隔离。不要仅改容器名就并行启动，也不要从另一个 worktree 执行 down 关闭当前组的实例。
 

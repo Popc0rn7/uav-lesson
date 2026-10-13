@@ -6,7 +6,7 @@ PX4/Gazebo 入口在 PC 运行两个 Docker：ROS 2 Humble 内运行 SUPER、ROG
 
 ## 教师准备（PC）
 
-本机复用已验收的 `gcopter-humble` 容器作为 Humble 依赖基线，要求其 `/workspace/ros2_ws/install/` 包含匹配当前 PX4 的 `px4_msgs` 和 Micro XRCE-DDS Agent。准备脚本将容器层保存为本地镜像并把 install 复制到专用运行镜像；不修改原容器、不使用其运行节点。这个流程依赖教师已有环境，尚不是新 PC 从官方基础镜像重建全部依赖的流程。
+算力镜像统一为 `uav-computer-ros-humble:local`，由 [Dockerfile](../../develop/docker/Dockerfile) 从固定摘要的 OSRF Humble 镜像构建。直接安装编译、SUPER/FAST-LIO2 与 Harmonic 接入依赖，构建固定提交的 `px4_msgs` 和 XRCE Agent v2.4.2；不再读取 `gcopter-humble` 容器或其 install 目录。源码版本来自 GCOPTER 原联调记录，算法工作区仍在 PC 挂载编译。
 
 前置条件：Docker 可访问；`thirdparty/SUPER` 指向搬入的 ROS 2 源码；PC 有 `/dev/dri/renderD128`；已有 Stage 2 PX4/Gazebo 镜像。本机 Docker 需要已授权的执行权限，下面的命令在有 Docker 权限的 PC 终端运行。
 
@@ -17,9 +17,23 @@ python3 stage3/super_docker.py build
 
 `prepare` 将源码复制到 Git 忽略的 `thirdparty/super_gazebo_ws/src/SUPER`，保留已有 ROS 2 修改，排除旧 build/install/log，并修正 SUPER 入口强制关闭仿真时间的行为。目标已存在时拒绝覆盖，已有准备好的副本直接执行 build。原 `../SUPER` 及旧 AirSim 链接保持原样。
 
-`build` 创建 `uav-stage3-ros:local`，仅新增 `libdw-dev` 依赖，复制既有控制消息/Agent，构建 `mars_quadrotor_msgs`、`rog_map`、`super_planner`。不构建 MAVROS、AirSim 适配器或 perfect_drone_sim。编译限制两路并发。成功判据：三个包构建完成、退出码 0；下载/镜像构建/源码编译属于课前准备，不提交产物或日志。
+`build` 创建 `uav-computer-ros-humble:local`，然后在临时容器内构建 `mars_quadrotor_msgs`、`rog_map`、`super_planner` 和课程雷达节点。编译限制两路并发。`lio-build` 使用同一镜像编译 FAST-LIO2，不再派生另一份 LIO 镜像。成功判据：镜像与各包构建完成、退出码 0；下载/镜像构建/源码编译属于课前准备，不提交产物或日志。
 
-本次实际基础环境、版本及验收结果见 [Validation](Validation.md)。镜像快照仍依赖原开发容器的手工准备，apt 软件源未快照锁定；教师需保存专用镜像及其摘要，换 PC/镜像重新验收。源码 commit 不覆盖用户未提交修改，分发前应保存实际源码补丁与版本。
+内存不足或编译器被系统杀死时，保留构建输出，以 `build --build-jobs 1` / `lio-build --build-jobs 1` 重试。已有旧镜像容器不会随 build 更新；完成构建后，确认原实例已落地，再 down/up 创建新实例并复验。
+
+基础镜像、消息包和 Agent 固定摘要/提交，apt 软件源未快照锁定。构建需要访问软件源与 GitHub；脚本传入当前 PC 的 `http_proxy`/`https_proxy`，不把代理保存为镜像环境。基础镜像可用 `build --humble-image '<镜像摘要>'` 显式替换，换版本必须重新匹配消息与验收。教师保存镜像 ID、镜像内 `/opt/uav/sources.txt` 和 `/opt/uav/packages.tsv`。历史飞行结果见 [Validation](Validation.md)，不自动等同于新镜像飞行验收。源码 commit 不覆盖用户未提交修改，分发前应保存实际源码补丁与版本。
+
+仅准备通用算力环境时，在 **PC 仓库根目录**执行（不需要 SUPER 源码）：
+
+```sh
+docker build --network host --build-arg http_proxy --build-arg https_proxy \
+  --build-arg DEV_UID="$(id -u)" --build-arg DEV_GID="$(id -g)" \
+  -t uav-computer-ros-humble:local develop/docker
+docker run --rm --network none uav-computer-ros-humble:local \
+  python3 /opt/uav/check_runtime.py
+```
+
+成功判据：构建退出码 0，自检 `passed=true`，包含消息 CDR 往返、Harmonic 桥路径、Agent 动态库和固定提交。此检查不启动 Agent、不解锁飞机。镜像默认加载 ROS/PX4 消息环境并等待；具体实验在启动时指定脚本。
 
 ## 启动和数据检查（PC）
 
@@ -77,7 +91,7 @@ down 对仍解锁或无法确认状态的飞机报错，保留现场。删除前
 | 现象 | 恢复 |
 | --- | --- |
 | Docker socket 权限拒绝 | 使用教师已授权的 Docker 会话，不修改系统 socket 权限 |
-| build 缺 Agent/消息包 | 检查原 `gcopter-humble` 安装前缀；不能用另一固件版本的消息替代 |
+| build 缺 Agent/消息包 | 检查 Dockerfile 构建输出和固定提交的下载；不能用另一固件版本的消息替代 |
 | 模型加载失败 | 检查标准机和独立 mid360s 两个挂载都存在 |
 | 气压计尚未就绪 | 检查 SITL `/tmp/stage3-barometer-warmup.log` 和 inspect；启动探针使用 FluidPressure，不能以关闭健康检查解决 |
 | 无 PX4 ROS 数据 | 核对域 10、Agent 8888、Fast DDS 与 localhost 设置；重启本任务节点清除旧域会话 |

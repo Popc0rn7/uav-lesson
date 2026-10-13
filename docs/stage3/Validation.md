@@ -192,3 +192,28 @@ C++ 可调外参预处理构建通过；地面高度单元测试覆盖原安装�
 用户将叠加视图改为 Gazebo＋两个独立 RViz：`super_gazebo_cloud.rviz` 只订阅 `/cloud_registered`，按高度着色展示当前点云；`super_gazebo_map.rviz` 只订阅 ROG 的 `/rog_map/occ` 与 `/rog_map/inf_occ`，用青色方块和淡橙色点展示积累占据体素与安全膨胀区域。两窗仍显示机器人和飞行路径。对应 GUI 容器为 `uav-stage3-gazebo-view`、`uav-stage3-rviz-view`、`uav-stage3-rviz-map-view`；`view-close` / `down` 会清理全部三个。实际截图逐一核查，点云与体素图不再叠在同一 RViz 窗口；两个 RViz 静止画面约 19～20 fps。窗口在当前双屏桌面分别放置，不代表单屏可同时完整显示。飞行中的资源快照：点云 RViz 0.3345 核 / 75.58 MiB、地图 RViz 0.3289 核 / 92.81 MiB、Gazebo GUI 1.0354 核 / 522 MiB；均非峰值。
 
 随后按默认 PX4/GNSS、无标记、2 m/s 独立冷启动并保持三窗口开启，完整往返 passed=true：去程 / 回程 65.452 / 63.712 s，真值终点误差 0.15737 / 0.10808 m；最小中心净空 0.95282 m，实际高度 1.6087～1.9586 m，峰值速度 2.1703 m/s，无接触，自动降落解除解锁，末次实时率约 1.0003。证据 `/tmp/stage3-px4-three-view/{result-2.json,trajectory-2.csv,cloud-rviz.png,map-rviz.png,gazebo.png}`。飞行验收后将两个 RViz 的路径线宽从 0.30 m 缩到 0.08 m，重新打开窗口并分别截图检查，未因此重复飞行；这只改变渲染，不改变 ROG 地图或控制输入。
+
+## 2026-10-12：通用算力镜像直接构建
+
+已取消 `gcopter-humble` 快照与 install 复制。`develop/docker/Dockerfile` 从 OSRF Humble 基础镜像直接构建 `uav-computer-ros-humble:local`，SUPER 和 FAST-LIO2 使用同一依赖镜像，算法源码仍挂载编译。原有运行实例未由本轮重启或替换。
+
+| 版本项 | 实际构建值 |
+| --- | --- |
+| 平台 | PC Linux amd64，Ubuntu Jammy / ROS 2 Humble |
+| 基础镜像 | `osrf/ros@sha256:1ee56d3ee5111f81e0a2a17b6ecd73447afb5c5b8a3c3574754f2646da9aee34` |
+| 最终算力镜像 ID | `sha256:c3fa439c7a5819aa1bb9cdda37865c316f05b597013881d4af7331b15b14b220` |
+| px4_msgs | `57f88be3c01a8c593c23507e4ca136767115ca22`，VehicleStatus v4 |
+| XRCE Agent | v2.4.2，`57d086216d01ec43121845d385894a25987f8a2c`，使用 Humble 系统 Fast DDS / Fast CDR |
+| SUPER 来源 | 原工作区旁 SUPER，HEAD `71298ecf0a588f416085d471578e33cb0963d123`＋已有未提交修改＋课程准备补丁 |
+| FAST-LIO2 / Livox 来源 | `prepare_lio.py` 的固定提交及课程补丁 |
+
+实际通过：
+
+- 镜像从固定官方基础镜像构建完成；构建历史没有课程 GCOPTER 快照层。软件包列表和源码版本在镜像 `/opt/uav/packages.tsv`、`/opt/uav/sources.txt`，apt 源未快照锁定，不宣称逐字节复现。
+- `/opt/uav/check_runtime.py` 离线自检 `passed=true`：ROS 包可见、NumPy/SciPy/YAML 可导入、六种 PX4 消息 CDR 往返、VehicleStatus v4、Agent 动态库无缺失。隔离网络中 Agent UDP 18888 初始化成功，三秒后由 timeout 停止，没有占用仿真 UDP 8888。
+- 从源码构建 SUPER 的三个核心包、FAST-LIO2/Livox 两个包和课程雷达包通过；算法编译使用单线程。正式 `lio-build --build-jobs 1` 入口通过，强制重新配置后成功生成 `timed_lidar`。SUPER/FAST-LIO2 有上游编译警告，没有编译错误。
+- 最终镜像中四个可执行文件（SUPER、FAST-LIO2、prefilter、timed_lidar）的动态库检查通过，六个课程 Python 适配/诊断模块导入通过，PositionCommand 和 Livox CustomMsg 的 CDR 往返通过。
+- 新镜像中现有 Python 几何/视场/高度测试 6/6 通过，C++ MID-360 扫描测试通过（`PASS non-repeating masks: 5629 / 5006 cells`）。PC 默认 Python 缺 NumPy 的首次测试未通过，随后在目标 Humble 镜像内验证，不把 PC Python 环境当作运行基线。
+- 只读订阅现有 PX4/旧 Agent：使用课程 `race_view_dds.xml` 的 UDP 传输配置，十秒内收到里程计 779 条、VehicleStatus 15 条，没有发送控制消息。首次未传入 DDS 配置时计数均为零；这说明独立诊断容器也需要使用实验通信配置。正式 up 入口继续显式传入该配置。
+
+上述只读订阅验证了新镜像消息与现有通信链路的兼容性，未验证新 Agent 与 PX4 的完整联调、新镜像全节点启动、飞行或故障降落。历史飞行证据属于旧镜像与原配置；新实例仍需按 Hands-on 重新 inspect、飞行及故障验收。没有板端或 GUI 复验。

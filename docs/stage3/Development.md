@@ -11,6 +11,7 @@ SUPER 相关代码统一放在 `stage3/super/`：包含运行入口、控制与�
 ## 当前交付
 
 - SUPER 的 ROS 2 Humble 核心、perfect_drone_sim 竞速入口，以及 PX4/Gazebo 实体走廊入口。
+- AirSim 替换后端位于 `stage3/super/airsim/`：宿主机场景与原 PX4 镜像由统一入口管理，复用起飞—往返—降落任务流程。当前已验证 PX4 控制接口，未接入 SUPER 规划器；操作、兼容问题与证据统一见该目录 README。
 - 默认走廊为 PX4/GNSS 定位、无附加墙面标记；雷达点云经 PX4 位姿变换后由 ROG-Map 积累为局部占据体素图，另有规划使用的膨胀体素图。点云 RViz 单独展示实时回波，地图 RViz 同时展示占据体素与安全膨胀区域；Gazebo 是第三个窗口。
 - Jev 文本示例保持原有状态；没有新增 Jev 飞行或付费 API 调用。
 
@@ -23,6 +24,7 @@ SUPER 相关代码统一放在 `stage3/super/`：包含运行入口、控制与�
 | 工作区域 | 主要文件 | 交接约定 |
 | --- | --- | --- |
 | 统一运行入口 | develop/docker/、stage3/super/super_docker.py、super_gazebo_view.py、Dockerfile.race | 修改默认配置或运行方式时同步 Hands-on |
+| AirSim 替换后端 | stage3/super/airsim/ | 保留现有 Gazebo 流程；PX4 控制验证不计为 SUPER 规划验收 |
 | 场景与传感器 | generate_gazebo_corridor.py、corridor_layout.json、px4_start.sh、gazebo_warmup.py | 场景变化须独立标记评测条件 |
 | LiDAR / IMU | ros_src/stage3_lidar/、super_imu.py、super_lidar.py | 维持时间、坐标系、外参、QoS 与失流语义 |
 | SUPER / PX4 控制 | submodules/SUPER/、super_px4.py、super_*.yaml | 更改控制链后必须重新实际飞行验收 |

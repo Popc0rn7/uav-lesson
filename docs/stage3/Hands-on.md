@@ -36,6 +36,10 @@ docker run --rm --network none uav-computer-ros-humble:local \
 
 成功判据：构建退出码 0，自检 `passed=true`，包含消息 CDR 往返、Harmonic 桥路径、Agent 动态库和固定提交。此检查不启动 Agent、不解锁飞机。镜像默认以 root 加载 ROS/PX4 消息环境并等待；编译容器通过 `--user` 使用 PC 的 UID/GID，运行工作区只读，上游日志写入 `/tmp/stage3-super`、`/tmp/stage3-fastlio`。已有算法产物需重新执行 build；使用 FAST-LIO 时还需 lio-build，使日志路径补丁生效。具体实验在启动时指定脚本。
 
+## AirSim 替换后端（PC）
+
+入口位于 `stage3/super/airsim/`，使用宿主机 AirSim 场景和原 PX4 Docker 镜像，复用本阶段起飞—往返—降落流程。当前先验证 PX4 控制，不启动 SUPER 规划器；配置、up/task/down、预期现象与排查统一见 [AirSim 操作说明](../../stage3/super/airsim/README.md)。下文仍为现有 Gazebo/SUPER 流程。
+
 ## 启动和数据检查（PC）
 
 先确认没有其它 PX4/Agent 占用 UDP 8888 或同名容器。命令仅管理 `uav-stage3-ros`、`uav-stage3-sitl`，不会停止其它课程进程：

@@ -1,0 +1,32 @@
+{
+  "scene_dir": "../../../submodules/AirSim/AbandonedPark/LinuxNoEditor",
+  "binary": "AbandonedPark/Binaries/Linux/AbandonedPark",
+  "scene_args": [
+    "AbandonedPark",
+    "-vulkan",
+    "-windowed",
+    "-ResX=640",
+    "-ResY=360",
+    "-nosound"
+  ],
+  "settings": "settings.json",
+  "image": "sha256:70584c9eb1e928a9a621b939de0ebab0c91940860fb2f28848bd27f26a0432f4",
+  "container": "uav-airsim-px4",
+  "startup_timeout_s": 90,
+  "task": {
+    "start_ned_m": [
+      0,
+      0,
+      -3
+    ],
+    "goal_ned_m": [
+      1,
+      0,
+      -3
+    ],
+    "speed_m_s": 0.5,
+    "hover_s": 3,
+    "position_tolerance_m": 0.6,
+    "leg_timeout_s": 25
+  }
+}

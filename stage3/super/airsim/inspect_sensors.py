@@ -28,4 +28,4 @@ with concurrent.futures.ThreadPoolExecutor(max_workers=6) as p:
     result=list(p.map(collect,names))
 json.dump(result,open(output/'summary.json','w'),indent=2)
 
-if any(r["rc"]!=0 or r["samples"]<2 or r.get("non_increasing",1)>0 for r in result):raise SystemExit(1)
+if any(r["rc"]!=0 or r["samples"]<120 or r.get("non_increasing",1)>0 for r in result):raise SystemExit(1)

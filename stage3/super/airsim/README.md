@@ -8,7 +8,7 @@
 
 ### 教师准备与场景配置
 
-PC Linux 需要可用的 Docker、图形桌面/Vulkan，以及完整的 AirSim 场景包。默认使用已有 `submodules/AirSim/AbandonedPark/LinuxNoEditor`；镜像固定为本机已验收的 ID，无需构建镜像或在容器内安装 Unreal 依赖。
+PC Linux 需要可用的 Docker、图形桌面/Vulkan，以及完整的 AirSim 场景包。本机 AirSim 源码使用 `~/AirSim`，默认使用 **AirSimNH**，场景路径约定为 `/mnt/disk1/wqy/Airsim-Scene/AirSimNH/LinuxNoEditor`。2026-10-14 已确认本机源码、场景启动脚本、x86-64 ELF 与资源目录存在；脚本使用项目参数 `AirSimNH`，入口直接执行 `AirSimNH/Binaries/Linux/AirSimNH`。AirSimNH 的实际启动与飞行尚未验收。源码目录本身不能作为打包场景启动。镜像保留历史已验收 ID，当前 PC 使用前仍需核实该镜像存在，无需为路径调整重建镜像。
 
 常规 up/status/task/down 使用 `uv run`，MessagePack 已纳入项目依赖。下面的临时环境仅供包含 pymavlink 的诊断入口使用。
 
@@ -19,7 +19,7 @@ uv venv /tmp/airsim-diagnostics-venv
 uv pip install --python /tmp/airsim-diagnostics-venv/bin/python msgpack==1.2.3 pymavlink==2.4.50
 ```
 
-默认配置为 `stage3/super/airsim/runtime.example.json`。换场景时提供自己的 JSON，并通过 `--config` 指定；相对路径以配置文件所在目录为基准，`binary` 例外，以 `scene_dir` 为基准：
+默认配置为 `stage3/super/airsim/runtime.example.json`。换场景时提供自己的 JSON，并通过 `--config` 指定；路径支持 `~` 展开为当前用户主目录，相对路径以配置文件所在目录为基准，`binary` 例外，以 `scene_dir` 为基准：
 
 | 配置 | 用途 |
 | --- | --- |
@@ -30,9 +30,11 @@ uv pip install --python /tmp/airsim-diagnostics-venv/bin/python msgpack==1.2.3 p
 | image / container | 原 PX4 镜像及专用容器名；可调整，换镜像后须重新验收 |
 | task | PX4 估计 NED 坐标、米、m/s；起点 `(0,0,-3)`，终点 `(1,0,-3)`，速度 0.5 m/s，悬停 3 秒，误差容限 0.6 m |
 
-本入口当前固定单机 `PX4`、host 网络和本机回环：TCP 4560，RPC 41451，控制 UDP 14540/14580。它会规范这些连接字段，但保留输入 settings 的传感器及 ViewMode。默认 NoDisplay 冻结主画面以减少负载，物理仿真和通信继续运行；需要看飞机时将输入设置的 ViewMode 改为 FlyWithMe，再 down/up。
+默认窗口为 1280×720，由 `scene_args` 中的 `-ResX=1280`、`-ResY=720` 显式指定。删除分辨率参数不会自动放大：Unreal 会沿用场景 `Saved/Config/LinuxNoEditor/GameUserSettings.ini` 保存的窗口尺寸（例如之前的 640×360）。调整尺寸后 down/up；如需全屏，将 `-windowed` 换为 `-fullscreen`。
 
-场景已打包进二进制及资源文件，换地图需提供对应完整场景包，不是只替换一个 Gazebo SDF 文件。任意新场景的出生点、障碍与资源需求未验收；默认任务只验证 AbandonedPark 出生点附近短距离。
+本入口当前固定单机 `PX4`、host 网络和本机回环：TCP 4560，RPC 41451，控制 UDP 14540/14580。它会规范这些连接字段，但保留输入 settings 的传感器及 ViewMode。默认 FlyWithMe 显示场景并跟随飞机；需要减少画面负载时可将输入设置的 ViewMode 改为 NoDisplay，再 down/up。NoDisplay 会冻结主画面，物理仿真和通信继续运行。
+
+场景已打包进二进制及资源文件，换地图需提供对应完整场景包，不是只替换一个 Gazebo SDF 文件。AirSimNH 的出生点、障碍与资源需求尚未验收，当前低速 1 m 往返任务也需重新确认附近空间。下文 AbandonedPark 的记录仅为历史证据，不能作为 AirSimNH 的验收结果。
 
 ### 启动、执行与停止
 
@@ -45,7 +47,7 @@ uv run stage3/super/airsim/runtime.py task
 uv run stage3/super/airsim/runtime.py down
 ```
 
-`up` 先启动宿主机 AirSim，检查属于该进程的 TCP 4560 监听，再启动 PX4。检查监听时不建立测试 TCP 连接，以免消耗 AirSim 的 accept。PX4 仍基于原镜像，挂载只读 `px4_start.sh` 与专用可写日志目录；启动 none_iris 和 simulator_mavlink，不启动 Gazebo。连续 IMU、有效位置、飞控健康以及 AirSim API 均通过后才报告就绪，默认总超时 90 秒。
+`up` 先启动宿主机 AirSim，检查属于该进程的 TCP 4560 监听，再启动 PX4。检查监听时不建立测试 TCP 连接，以免消耗 AirSim 的 accept。PX4 仍基于原镜像，挂载只读 `px4_start.sh` 与专用可写日志目录；启动 none_iris 和 simulator_mavlink，不启动 Gazebo。连续 IMU、有效位置、飞控健康以及 AirSim API 均通过后才报告就绪，默认总超时 180 秒。AirSimNH 在本机机械盘首次加载曾耗时约 70 秒，窗口出现前需等待场景初始化；以就绪检查而非窗口出现判断连接成功。
 
 `task` 明确执行解锁与飞行：起飞 → 起点悬停 → 终点悬停 → 返回起点悬停 → 降落解除解锁。每次运动重新申请 API 控制，每个航段有超时，并在悬停后检查实际估计位置误差；API 返回 true 不等于精确到点。异常或 Ctrl+C 会尝试取消任务并降落，参数按任务前快照恢复。通信完全丢失时降落请求不保证送达；相关失败写入报告。
 
@@ -63,8 +65,10 @@ up 可用 `--image` 覆盖配置镜像。旧 `run_px4.sh` 已委托同一 up 实
 
 ### 成功判据、故障恢复与证据
 
+2026-10-14 本机 AirSimNH 启动复验：`up` 通过 AirSim 监听、连续传感器、有效定位、健康状态与 RPC 检查；随后切换 FlyWithMe 并重启，双方再次就绪。证据目录 `artifacts/airsim-runtime/8fd5ed6d91e140038888e6a5af738931/`。本轮未起飞，不能作为 AirSimNH 往返任务验收。
+
 - 成功：up 输出“AirSim 已监听”再输出“已就绪”；status 为双方运行、Disarmed/Hold；task 输出三个到点误差、任务通过和报告路径；最后降落解除解锁。
-- TCP 端口检查使用 SO_REUSEADDR 并尝试 listen，容许退出后的 TIME_WAIT，但仍拒绝真实监听者；只有 EADDRINUSE 报占用，其他权限/网络错误保留原始原因。随机测试端口已复现旧检查在无监听者的 TIME_WAIT 状态下误报，新检查通过；真实监听者仍被拒绝。
+- TCP 端口检查尝试 SO_REUSEADDR 和 listen；若仍不可绑定，读取本网络命名空间 IPv4/IPv6 的 TCP 状态。仅有 TIME_WAIT 时明确提示并自动等待释放（每端口最多 75 秒，不计入后续场景启动超时），不用反复手动 up；真实监听或其他活动连接仍报占用，权限/网络错误保留原始原因。不修改系统 TCP 参数。旧场景未启用地址复用时，SO_REUSEADDR 本身不能保证绕过 TIME_WAIT。
 - 端口或同名容器冲突：先用 `ss -ltnp`、`ss -lunp`、`docker ps -a` 确认已有实例用途。入口不会接管手动启动的 AirSim/PX4；先自行停止确认属于本任务的旧实例。
 - 场景启动失败：查看本次 `airsim-console.log`；PX4 无传感器/定位不健康：查看 `px4-console.log` 与 `px4-logs/`。启动失败会清理本次创建的两边并保留记录；不关闭健康检查强行通过。
 - 场景或 PX4 单独退出：不承诺自动重连，用 status 保留诊断，再 down/up 重建整对实例。
@@ -76,6 +80,79 @@ up 可用 `--image` 覆盖配置镜像。旧 `run_px4.sh` 已委托同一 up 实
 
 
 ## 本轮问题分级与边界
+
+### 本机 AirSimNH：PX4 主线验收与合并接口（2026-10-14）
+
+本轮固定 AirSimNH 场景、本机 PX4 镜像 ID、单机 `PX4`、FlyWithMe、1280×720。AirSim 源码参考来自 `~/AirSim`，打包场景位于 `/mnt/disk1/wqy/Airsim-Scene/AirSimNH/LinuxNoEditor`；未重编场景，源码检出版本不代表打包二进制版本。PX4 为 1.18 beta，提交 `61907962c9220437ec01a98fa26bfbf5cbb254b5`。
+
+首轮证据目录：`artifacts/airsim-runtime/09418f7beafa4afdac986c33a428404a/`；最终复验目录：`artifacts/airsim-runtime/bab271d4f8dc4c5c82cf18be3488147f/`。仅保留本机，不提交日志。
+
+| 验证 | 实际结果与证据 |
+| --- | --- |
+| 飞控传感器 | `sensors/summary.json`：加速度、角速度、气压、磁场、GPS、本地位置各 120 帧，时间戳持续递增；发布率依次为 333.33、333.33、333.33、333.33、47.62、111.11 Hz（仿真时间）。气压与磁场仍有重复值，不等于独立测量率 |
+| RPC 短距离往返 | `task-1791973127711465849.json`：3 m 高度、0.5 m/s、1 m 往返通过；三个悬停点误差 0.130 / 0.129 / 0.178 m，最终落地解除解锁 |
+| 原生 PX4 Offboard XYZ | `offboard-1791973312633244592.json`：2 m 起飞，12 秒水平 X/Y 各 1 m、上升 0.5 m 的平滑往返；50 Hz 目标发送，三轴位置、速度、加速度同时有效；跟踪 RMSE 0.065 m，最大 0.136 m，返回误差 0.053 m |
+| Offboard 设定值停流 | 同一报告：保留 MAVLink 心跳与遥测，仅停设定值，约 1.52 秒墙钟后进入 LAND；不补发降落命令，实际落地、解除解锁，随后恢复 Hold |
+| 最终版本复验 | 最终目录 `offboard-1791973699403191584.json`：复用默认 payload 链路，XYZ RMSE 0.094 m、最大误差 0.182 m、返回误差 0.073 m，停流 1.22 秒后 LAND，实际落地解除解锁且清理后 ready=true；`sensors/` 的六类传感器均重新采满 120 帧 |
+
+首轮 Offboard 报告 `offboard-1791973238871991700.json` 的 XYZ 已通过，但脚本将 pymavlink 的 `LAND` 名称误认为应该是 `AUTO.LAND`，故报告失败；最终报告已用修正后的脚本重新实际飞行通过。另一个 `offboard-1791973222006177908.json` 是诊断端口冲突，在解锁前退出。保留失败记录，不改写为成功。
+
+后续同一会话从独立 Offboard 切回 RPC 时，两次起飞命令均 accepted 但未离地并自动解除解锁，证据为 `rpc-controls.json` 和 `task-1791973489017348174.json`；不得忽略该失败。旧验证器动态停止自建 MAVLink 实例后曾出现 trajectory_setpoint 更新计数存在、listener 却报未发布的异常，根因未确认。当前验证器已改为复用默认 payload 链路；最终实例在 Offboard 后立即执行 `verify_flight.py`，实际完成起飞、悬停、1 m 位置目标、−0.25 m/s 速度、10°/s×2 s 偏航、返回与降落，`rpc-controls.json` 的 error=null，偏航变化 19.79°。`final-px4-check.json` 确认 Disarmed/Hold、无 failsafe、健康检查 OK、参数恢复及 trajectory_setpoint 正常发布。修正版已通过一次顺序切换；旧版失效的精确根因未确认，不把这次规避写成上游问题已修复。
+
+**PC，双方已通过 up 就绪，使用上文准备的诊断 Python 环境：**
+
+```bash
+/tmp/airsim-diagnostics-venv/bin/python stage3/super/airsim/verify_offboard.py --run
+```
+
+该入口独立于 ROS，使用 MAVLink `SET_POSITION_TARGET_LOCAL_NED`，位置/速度/加速度/yaw 有效，忽略 yaw rate；以 PX4 的 `LOCAL_POSITION_NED` 作为反馈，不向控制输入场景真值。XYZ 轨迹来自固定余弦函数，位置、速度、加速度数值导数一致；这是控制接口测试，不是 SUPER 规划轨迹或避障结果。通过阈值为最大跟踪误差≤0.8 m、返回误差≤0.3 m，报告另保留逐帧状态与实际误差。最终默认链路 XYZ 段的 118 条记录中有 45 个不同的 PX4 位置时间戳，最大接收年龄 0.265 秒；它证明低速设定值执行，不代表高速轨迹跟踪或高频 DDS 反馈已验收。
+
+测试持有 runtime 管理锁，需要已落地未解锁；复用本入口 PX4 默认 payload 链路（PC UDP 14030 ↔ PX4 UDP 14280），拒绝端口已有客户端，退出只关闭自己的 PC socket，不创建/停止飞控 MAVLink 实例。默认 XYZ 模式不改遥测发布率；圆周速度档临时调整该链路的遥测流并恢复。报告同时记录 PX4 测量时间戳与墙钟接收新鲜度，50 Hz 指墙钟目标发送率，不代表反馈采样率。不要同时运行其他控制器。测试临时设置 `COM_RC_IN_MODE=4`、`COM_OF_LOSS_T=0.5`、`COM_OBL_RC_ACT=4`，结束恢复原值（本轮快照分别为 1 / 1 / 0，已核对恢复）。**失流降落结果只适用于这些测试参数**，不代表默认 AirSim runtime 已采用 Gazebo 的失流策略。异常尝试降落并恢复参数；通信完全丢失不保证降落请求送达。默认 XYZ 保持 4 m 水平/5 m 高度范围，圆周档范围见下节；不绕过解锁健康检查；不适用于真实设备。
+
+后续与 Gazebo/SUPER 合并时保持以下接口；AirSim 直接对接 ROS 2 Docker 的实现由其他开发者负责，本轮未修改或启动它，也未改动 Gazebo/SUPER 控制代码。
+
+| 合并项 | 现有 Gazebo/SUPER 约定 | AirSim 接入要求与本轮边界 |
+| --- | --- | --- |
+| 飞控执行 | `super_px4.py` 将 `/planning/pos_cmd` 的 ENU XYZ 位置/速度/加速度转换为 NED，经 DDS 发送给 PX4 | 本轮以 MAVLink 证明 PX4 能在 AirSim 动力学下执行同类设定值；DDS 传输、消息版本、更新率仍需独立验收，不把 RPC moveToPosition 代替连续轨迹执行 |
+| 定位与原点 | 默认 PX4/GNSS；世界 ENU，机体 FLU，飞控 NED/FRD；位置/速度转换为 `(y,x,-z)`，位置叠加局部原点 | 用 PX4 估计定位，不用 AirSim 真值反馈；AirSim 出生点和 PX4 原点不同，不照搬走廊 `.25 m` 地面偏置、1.95 m 起飞层及走廊边界 |
+| 感知与地图 | `/cloud_registered` 为 world 点云；`/lidar_slam/odom` 为 world 定位；ROG-Map 积累并膨胀障碍 | 他人提供 AirSim 传感器/ROS 适配后，先核对采样时刻、雷达外参、机体/世界轴向与点云可用性，再接地图。默认 settings 未配置 LiDAR，不能宣称已有避障输入 |
+| 时钟与消息 | 单机 `uav1`，ROS 域 10，PX4 XRCE Agent 8888；状态和点云新鲜度/复位受检查 | 本轮 XRCE client 为 disconnected，未验证 DDS。合并时确认域、px4_msgs 版本后缀及同源仿真时间；不能混用墙钟、AirSim 纳秒和 PX4 微秒时间戳 |
+| 失流与控制权 | 50 Hz 飞控设定值，规划/状态/雷达超时处理；Gazebo 启动脚本明确配置失流降落 | 本轮仅覆盖设定值停流；规划失流、点云失流、状态/时钟停流、估计器复位及桥进程退出需在合并后注入验证；RPC 控制与 SUPER 控制不能同时持有执行权 |
+| 避障复现 | Gazebo 的固定走廊、障碍、速度档及评价条件已有证据 | AirSimNH 不是同一赛道，先建立可重复的出生点、障碍任务和碰撞评测，再验收 2 m/s 避障；不能把本轮短距离低速结果写成 SUPER 避障复现或跨场景公平对比 |
+
+合并顺序：先静止核对 PX4 估计定位与点云/时钟 → 在 ROS/DDS 链路复验同样低速 XYZ → 检查 ROG 占据及膨胀地图 → 接 SUPER 完成低速单障碍去回 → 再按固定场景、参数和资源预算评测速度档与失败率。雷达/LIO、SUPER 实际避障、多轮成功率和实机/板端均不在本轮已完成范围内。
+
+### 本机圆周速度档：1 m/s 通过，2 m/s 紧弯未通过（2026-10-14）
+
+本轮不改仿真机型或控制增益，不放宽 PX4 的速度/加速度/倾角设置。读取到 `MPC_XY_VEL_MAX=12 m/s`、`MPC_ACC_HOR_MAX=5 m/s²`、`MPC_TILTMAX_AIR=45°`。这些参数不是对实际运动速度/加速度的统一硬裁剪：速度反馈会有超调；各加速度参数作用于特定飞行模式或轨迹生成环节，不能假定会替外部轨迹做全部约束。Offboard 的速度、加速度与位置一起输入时是控制器前馈，外部仍需生成一致、可执行的参考。参见 [PX4 Offboard 说明](https://docs.px4.io/main/en/flight_modes/offboard#copter) 和 [参数参考](https://docs.px4.io/main/en/advanced_config/parameter_reference#MPC_XY_VEL_MAX)。
+
+实际响应还受 AirSim 机体质量、惯量、电机响应、阻力及 PX4 控制增益共同影响；本轮没有把 AirSim 参数与 Gazebo x500 对齐。参考速度档不能写成实际全程严格限速，模型中的物理能力也不会因提高 PX4 上限自动提升。
+
+**PC，已 up 就绪并确认当前落地点附近空域：**
+
+```bash
+/tmp/airsim-diagnostics-venv/bin/python stage3/super/airsim/verify_offboard.py --run --speed 1
+# 第一档通过且空域仍适用，再单独执行第二档：
+/tmp/airsim-diagnostics-venv/bin/python stage3/super/airsim/verify_offboard.py --run --speed 2
+```
+
+速度档使用 2 m 高度、2 m 半径、两圈水平圆周，3 秒平滑加减速，默认圆心在起点 NED 方位 180°；整条路径最大离起点 4 m，诊断包络为水平 6 m / 高度 5 m。该包络是为新圆周轨迹预先设置的范围，不是失败后放宽门限。持续实时检查跟踪误差 0.8 m 门限，返回误差需≤0.3 m，实测峰值需达到参考档位的 80%，失败停止升档并尝试降落。降落期间继续记录包络越界，不能因越界中断降落等待。轨迹执行前后查询碰撞时间戳用于评测，不把场景位姿或碰撞真值反馈给控制。深度预检是离线选空域，不是在线避障。
+
+最终轨迹以 PX4 LOCAL_POSITION_NED 时间戳和估计实时率推进，误差参考与 PX4 测量时间对齐，不把旧测量直接与最新设定值比较。为减少遥测限流，临时停用 payload 链路上的 GPS_RAW_INT/HIGHRES_IMU 消息，位置消息请求 50 Hz；这不停止进入 PX4 的 GPS/IMU 传感器。退出逐项核对恢复的周期。本机 PX4 对 GPS_RAW_INT 的查询返回 −1 表示默认事件驱动，而设置命令的 −1 表示停流；已通过设置 0 恢复默认并核对实收消息，不能原样回写该负值。
+
+| 最终实测 | 参考 / 实测峰值 | 结果 |
+| --- | --- | --- |
+| 1 m/s 两圈 | 1.00 / 1.31 m/s | passed=true，RMSE 0.266 m、最大误差 0.429 m、返回误差 0.049 m；无新轨迹碰撞，自动落地解除解锁，参数/消息周期恢复、健康检查通过 |
+| 2 m/s 紧弯 | 2.00 / 约 2.45 m/s | 轨迹开始约 3.6 秒后，逐控制周期检查触发误差>0.8 m；中止并实际落地解除解锁。没有完成两圈，不计通过 |
+| 3 m/s | 未执行 | 第二档未通过，停止升档；不能宣称已验证 |
+
+最终证据在 `artifacts/airsim-runtime/bab271d4f8dc4c5c82cf18be3488147f/`：`offboard-1791974718271125294.json`（1 档）、`offboard-1791974816172130703.json`（2 档）、`speed-summary.json`（派生汇总），空域深度检查在 `speed-survey*/`。2 档常规日志约 10 Hz，触发门限按每次设定值循环检查，常规采样的最大值可能低于触发瞬间；当前脚本已补充单独记录触发事件，既有历史报告不改写。
+
+保留开发轮次：`offboard-1791974427291134255.json` 为首轮 1 档，飞行完成但 GPS 消息恢复校验失败，随后地面恢复并复验；`offboard-1791974576888940055.json` 为首轮 2 档误差中止，降落监测又因包络抛错，随后统一 land 入口确认落地。后续已修复恢复语义和降落等待，并按仿真时间/测量时间对齐重跑。复查完整窗口实时率约 1，时间对齐修正并未消除 2 档误差，因此不能把失败归因于实时率不同。
+
+当前结论只适用于这条半径 2 m 的紧弯：2 m/s 时向心加速度为 2 m/s²，是 1 m/s 时的四倍。已经实际飞到约 2.45 m/s，但轨迹跟踪尚未验收；既不能称为“PX4 限速到 1 m/s”，也不能推断所有 2 m/s 直线任务失败。控制参数、动力学匹配、采样/执行时序的影响仍需隔离，下一步可固定轨迹分别测试直线启停和较大半径转弯，再决定是否调参。未复现 SUPER 避障。
+
+本轮按用户约定暂不继续动力学与控制调参，先提交当前工作。Python 语法、10 项 AirSim 单元检查和 diff 空白检查通过；最终重建场景恢复出生点待用，`artifacts/airsim-runtime/0cd8b14a890d4fb2a1893cb42fabe7b3/speed-test-standby.json` 记录未解锁、Hold、无 failsafe、健康检查 OK。这些检查不替代尚未通过的高速轨迹或 SUPER 避障验收。
 
 ### 当前采用的处理结论
 

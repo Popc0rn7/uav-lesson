@@ -3,7 +3,7 @@
   "SimMode": "Multirotor",
   "ClockType": "SteppableClock",
   "ClockSpeed": 1.0,
-  "ViewMode": "NoDisplay",
+  "ViewMode": "FlyWithMe",
   "Vehicles": {
     "PX4": {
       "VehicleType": "PX4Multirotor",

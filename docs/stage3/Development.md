@@ -11,7 +11,8 @@ SUPER 相关代码统一放在 `stage3/super/`：包含运行入口、控制与�
 ## 当前交付
 
 - SUPER 的 ROS 2 Humble 核心、perfect_drone_sim 竞速入口，以及 PX4/Gazebo 实体走廊入口。
-- AirSim 替换后端位于 `stage3/super/airsim/`：宿主机场景与原 PX4 镜像由统一入口管理，复用起飞—往返—降落任务流程。当前已验证 PX4 控制接口，未接入 SUPER 规划器；操作、兼容问题与证据统一见该目录 README。
+- AirSim 替换后端位于 `stage3/super/airsim/`：宿主机场景与原 PX4 镜像由统一入口管理。本机 AirSimNH 已验证传感器、RPC 往返、独立 MAVLink Offboard XYZ 及设定值停流降落；仍未接入 SUPER 规划器。AirSim 直接对接 ROS 2 Docker 由其他开发者负责，本轮仅处理 PX4 侧及合并接口，不改动该链路。操作、兼容问题、参数适用范围与证据统一见 [AirSim README](../../stage3/super/airsim/README.md#本机-airsimnhpx4-主线验收与合并接口2026-10-14)。
+- AirSimNH 控制速度档：2 m 半径圆周的 1 m/s 两圈通过；2 m/s 实测峰值约 2.45 m/s，但跟踪误差超过 0.8 m 后中止并降落，3 m/s 未执行。动力学与控制调参按本轮约定暂不继续，不将未通过项写成已验收；后续合并仍需独立完成感知、时钟、DDS 和 SUPER 避障验证。
 - 默认走廊为 PX4/GNSS 定位、无附加墙面标记；雷达点云经 PX4 位姿变换后由 ROG-Map 积累为局部占据体素图，另有规划使用的膨胀体素图。点云 RViz 单独展示实时回波，地图 RViz 同时展示占据体素与安全膨胀区域；Gazebo 是第三个窗口。
 - Jev 文本示例保持原有状态；没有新增 Jev 飞行或付费 API 调用。
 

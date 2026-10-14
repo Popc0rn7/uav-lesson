@@ -1,18 +1,18 @@
 {
-  "scene_dir": "../../../submodules/AirSim/AbandonedPark/LinuxNoEditor",
-  "binary": "AbandonedPark/Binaries/Linux/AbandonedPark",
+  "scene_dir": "/mnt/disk1/wqy/Airsim-Scene/AirSimNH/LinuxNoEditor",
+  "binary": "AirSimNH/Binaries/Linux/AirSimNH",
   "scene_args": [
-    "AbandonedPark",
+    "AirSimNH",
     "-vulkan",
     "-windowed",
-    "-ResX=640",
-    "-ResY=360",
+    "-ResX=1280",
+    "-ResY=720",
     "-nosound"
   ],
   "settings": "settings.json",
   "image": "sha256:70584c9eb1e928a9a621b939de0ebab0c91940860fb2f28848bd27f26a0432f4",
   "container": "uav-airsim-px4",
-  "startup_timeout_s": 90,
+  "startup_timeout_s": 180,
   "task": {
     "start_ned_m": [
       0,

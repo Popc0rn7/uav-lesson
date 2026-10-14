@@ -26,7 +26,7 @@ def command(*args, check=True, timeout=15):
 
 
 def resolve(path, base):
-    return (base / path).resolve()
+    return (base / Path(path).expanduser()).resolve()
 
 
 def load_config(path):
@@ -107,22 +107,49 @@ def listen_owned(pid, port):
     return False
 
 
+def tcp_states(port):
+    """读取本网络命名空间的 TCP 状态，不建立探测连接。"""
+    states = []
+    for name in ("tcp", "tcp6"):
+        for row in Path(f"/proc/net/{name}").read_text().splitlines()[1:]:
+            fields = row.split()
+            if int(fields[1].split(":")[1], 16) == port:
+                states.append(fields[3])
+    return states
+
+
+def check_port(kind, port, time_wait_timeout_s=75):
+    deadline = time.monotonic() + time_wait_timeout_s
+    announced = False
+    protocol = "TCP" if kind == socket.SOCK_STREAM else "UDP"
+    while True:
+        with socket.socket(socket.AF_INET, kind) as sock:
+            try:
+                if kind == socket.SOCK_STREAM:
+                    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                sock.bind(("0.0.0.0", port))
+                if kind == socket.SOCK_STREAM:
+                    sock.listen(1)
+                return
+            except OSError as exc:
+                if exc.errno != errno.EADDRINUSE:
+                    raise RuntimeError(f"无法检查 {protocol} 端口 {port}：{exc}") from exc
+                states = tcp_states(port) if kind == socket.SOCK_STREAM else []
+                if not states or any(state != "06" for state in states):
+                    raise RuntimeError(f"{protocol} 端口 {port} 已占用；先确认现有实例用途") from exc
+                if time.monotonic() >= deadline:
+                    raise RuntimeError(f"TCP 端口 {port} 的 TIME_WAIT 尚未释放，等待超时；稍后重试") from exc
+                if not announced:
+                    print(f"TCP {port} 仅有 TIME_WAIT 残留，自动等待释放（最多 {time_wait_timeout_s} 秒）…", flush=True)
+                    announced = True
+        time.sleep(.5)
+
+
 def check_ports():
     for kind, ports in [(socket.SOCK_STREAM, [4560, 41451]),
                         (socket.SOCK_DGRAM, [14540, 14580, 18570, 14280, 13030])]:
         for port in ports:
-            with socket.socket(socket.AF_INET, kind) as sock:
-                try:
-                    if kind == socket.SOCK_STREAM:
-                        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                    sock.bind(("0.0.0.0", port))
-                    if kind == socket.SOCK_STREAM:
-                        sock.listen(1)
-                except OSError as exc:
-                    protocol = "TCP" if kind == socket.SOCK_STREAM else "UDP"
-                    if exc.errno == errno.EADDRINUSE:
-                        raise RuntimeError(f"{protocol} 端口 {port} 已占用；先确认现有实例用途") from exc
-                    raise RuntimeError(f"无法检查 {protocol} 端口 {port}：{exc}") from exc
+            check_port(kind, port)
 
 
 def runtime_settings(config):

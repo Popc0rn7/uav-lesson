@@ -7,7 +7,7 @@ import subprocess
 import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
-TARGET = ""  # 留空使用 HDC 默认设备；多设备时填写 connect key。
+TARGET = ""  # 必须填写本次确认的 connect key，不使用默认设备。
 BOARD = ROOT / "stage1/robopi"
 REMOTE_STAGE = "/data/local/workspace/stage1"
 MODEL = ROOT / "artifacts/models/Qwen3.6-35B-A3B/qwen3.6-35b-a3b_w4a8_256_256k_b1_1chip_2cores"
@@ -27,6 +27,7 @@ def collect_files():
     files = []
     for name in ("serve.sh", "ros_env.sh", "chat_node.py", "backend.py",
                  "qwen_infer/qwen_ohos_infer", "qwen_infer/run.sh",
+                 "qwen_infer/run.py", "qwen_infer/models.json", "qwen_infer/vqa_client.py",
                  "qwen_infer/server.py", "qwen_infer/requirements-server.txt",
                  "qwen_infer/lib/libhoumo_infer.so", "qwen_infer/lib/libtokenizer_lib.so",
                  "qwen_infer/LICENSE"):
@@ -34,13 +35,17 @@ def collect_files():
     if not MODEL.is_dir():
         raise FileNotFoundError(f"缺少模型目录：{MODEL}")
     require_file(MODEL / "hmquant/quant_embedding.bin")
+    if not any(MODEL.glob('*_visual_m*.hmm')):
+        raise FileNotFoundError(f"模型缺少 VQA 所需的动态视觉图 *_visual_m*.hmm：{MODEL}")
     files.extend((require_file(path), REMOTE_MODEL + "/" + str(path.relative_to(MODEL)))
                  for path in sorted(MODEL.rglob('*')) if path.is_file())
     return files
 
 
 def hdc(*args, timeout=60):
-    result = subprocess.run(["hdc", *(["-t", TARGET] if TARGET else []), *args],
+    if not TARGET.strip():
+        raise RuntimeError('请先在 stage1/deploy.py 显式设置本次目标设备 TARGET')
+    result = subprocess.run(["hdc", "-t", TARGET, *args],
                             check=True, text=True, stdout=subprocess.PIPE,
                             stderr=subprocess.STDOUT, timeout=timeout)
     print(result.stdout, end="")

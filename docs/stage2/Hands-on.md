@@ -200,7 +200,7 @@ docker stats --no-stream uav-stage2-sitl
 
 ### 相机基线：Orbbec Gemini 2 几何近似
 
-依据 [官方产品页](https://www.orbbec.com/products/structured-light-camera/gemini-2/) 和 [官方规格书 v1.0](https://www.orbbec.com/wp-content/uploads/2023/04/ORBBEC_Datasheet_Gemini-2.pdf)（2026-10-10 核对），采用 RGB 640×360 / 30 Hz、水平 86°，深度 640×400 / 30 Hz、水平 91°，范围 0.15–10 m（官方最佳范围 0.2–5 m）。模式支持更高分辨率，课堂选择低分辨率以控制负载。
+依据 [官方产品页](https://www.orbbec.com/products/structured-light-camera/gemini-2/) 和 [官方规格书 v1.0](https://www.orbbec.com/wp-content/uploads/2023/04/ORBBEC_Datasheet_Gemini-2.pdf)（2026-10-10 核对），采用 RGB 640×360 / 30 Hz、水平 86°，深度 640×400 / 30 Hz、水平 91°，原始近似范围 0.15–10 m（官方最佳范围 0.2–5 m）；2026-10-14 为 Stage 5 跟随实验将共享模型的仿真深度上限扩展至 20 m，不代表真实 Gemini 2 的测距能力。模式支持更高分辨率，课堂选择低分辨率以控制负载。
 
 Gazebo 针孔由水平视场和宽高比推导垂直视场：RGB 约 55.4°、深度约 64.9°；官方标称分别约 55°/66°，并非精确实机内参。机壳用 90×25×30 mm 盒体、98 g 质量，均匀盒体惯量近似，取消 OakD-Lite 网格。camera_link 相对 base_link 位于 `(0.17,0,0.025)` m，共用传感器原点再向前 0.016 m，坐标轴沿用 Gazebo +X 前、+Y 左、+Z 上；这不是 ROS optical frame，也不是已标定的 RGB/IR 外参。
 
@@ -227,7 +227,7 @@ Gazebo 针孔由水平视场和宽高比推导垂直视场：RGB 约 55.4°、�
 ./stage2/show_sensors.sh
 ```
 
-浏览器打开 <http://127.0.0.1:8090>，RGB 和 D 两图持续更新。RGB 为 640×360，深度为 640×400、单位米；默认深度色标 0.15–10 m。深度伪彩色 JPEG 仅用于展示，算法使用原始浮点深度。两路未做时间同步或 RGBD 光学对齐。
+浏览器打开 <http://127.0.0.1:8090>，RGB 和 D 两图持续更新。RGB 为 640×360，深度为 640×400、单位米；Stage 2 展示默认色标仍为 0.15–10 m，可用 `--far 20` 显示共享模型当前 20 m 仿真量程。深度伪彩色 JPEG 仅用于展示，算法使用原始浮点深度。两路未做时间同步或 RGBD 光学对齐。
 
 **PC 仓库根目录，终端 D**：
 

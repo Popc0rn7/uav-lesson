@@ -31,3 +31,6 @@ wheels/
 # Stage 3 由生成器创建的仿真运行产物；源配置和生成器入库
 /stage3/super/models/
 /stage3/super/worlds/
+
+# Stage 5 场景由 generate_world.py 生成
+/stage5/street.sdf

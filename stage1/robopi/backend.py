@@ -64,6 +64,8 @@ def wait_ready():
             with HTTP.open(INFER_URL + '/health', timeout=2) as response:
                 health = read_json(response)
             if health.get('status') == 'ready':
+                if health.get('model') != 'qwen3.6-35b-a3b':
+                    raise RuntimeError('8080 服务模型不是 Stage 1 要求的 qwen3.6-35b-a3b，请检查已有服务')
                 pid = health.get('worker_pid')
                 if type(pid) is not int or pid <= 1:
                     raise RuntimeError('常驻服务 worker_pid 无效')

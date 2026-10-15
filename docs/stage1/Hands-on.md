@@ -161,3 +161,59 @@ TCIM v2.5.0，PCI 0000:01:00.0 的 Houmo 1f6b:0c00，get_devices --num xh2 返�
 网络恢复后首次 DDS 发现仍超时；只重启 ROS bridge 后立即恢复，模型服务未重启。
 切换网络后如有发现问题，可重启本项目 ROS bridge，使其重新绑定接口；无需重载模型。
 这些结果属于 2026-10-08 实测，不代表当前板端进程状态。以上耗时为本次样本观测，不是正式性能基准。
+
+## PC：OpenAI/vLLM 风格的 VQA 请求
+
+2026-10-15 起，Stage 1 使用更新后的上游 qwen_ohos_infer 运行包，模型显式选择 qwen3.6-35b-a3b。原 ROS 聊天仍通过文本 /infer 工作；同一个常驻 worker 新增图片接口。模型目录必须包含 *_visual_m*.hmm；/health 应包含 status=ready、model=qwen3.6-35b-a3b、vision_enabled=true。
+
+前置条件：按环境准备取得新的上游 dist（不能使用历史文本版归档），板端模型服务已就绪，PC 有 PNG/JPEG 图片。以下命令在 **PC，仓库根目录** 执行。先用 `hdc list targets -v` 确认设备，再检查已有转发：
+
+```sh
+hdc -t '<connect-key>' fport ls
+# 只有不存在该映射时建立：PC 18080 → RoboPi 8080
+hdc -t '<connect-key>' fport tcp:18080 tcp:8080
+curl --noproxy '*' http://127.0.0.1:18080/health
+curl --noproxy '*' http://127.0.0.1:18080/v1/models
+python3 stage1/robopi/qwen_infer/vqa_client.py \
+  --image /path/on/pc/image.png --prompt '请描述图片中的主要物体。'
+```
+
+成功判据：健康状态及模型名正确，客户端打印与图片内容一致的回答。把同一问题分别用于两张内容不同的图片做对照；HTTP 200 本身不能证明模型实际看了图片。HDC 映射仅用于这条 HTTP 验证，ROS 聊天仍使用原 DDS 链路。
+
+请求协议采用 OpenAI Chat Completions 的 messages/content/image_url 结构，兼容 vLLM 常用的 base64 图片模式，格式参考 [OpenAI 图片输入](https://developers.openai.com/api/docs/guides/images-vision?api-mode=chat) 和 [vLLM 多模态输入](https://docs.vllm.ai/en/latest/features/multimodal_inputs/#image-inputs_1)。**PC 已有 openai Python SDK 时**也可这样调用（示例不调用 OpenAI 云端）：
+
+```python
+import base64
+from pathlib import Path
+from openai import OpenAI
+
+data = base64.b64encode(Path('/path/on/pc/image.png').read_bytes()).decode()
+client = OpenAI(base_url='http://127.0.0.1:18080/v1', api_key='EMPTY')
+reply = client.chat.completions.create(
+    model='qwen3.6-35b-a3b', temperature=0, max_tokens=128,
+    messages=[{'role': 'user', 'content': [
+        {'type': 'text', 'text': '这张图片中有什么？'},
+        {'type': 'image_url', 'image_url': {
+            'url': f'data:image/png;base64,{data}', 'detail': 'auto'}},
+    ]}],
+)
+print(reply.choices[0].message.content)
+```
+
+当前兼容范围：单轮 user（可带 system）、按输入顺序交错的文本和最多4张 PNG/JPEG 图片、temperature=0、top_p=1、n=1、非流式响应；max_tokens 或 max_completion_tokens 二选一。图片使用 data URL，整个 JSON 不超过1 MiB、单图不超过1600万像素。暂不支持远程图片 URL、多轮历史、SSE、tools、response_format、detail=low/high、其他采样参数；不支持的设置明确报错，不作为完整 OpenAI/vLLM 实现宣称。
+
+响应保留 choices[0].message.content、finish_reason 和 usage；prompt_tokens 使用包含视觉展开的实际输入 token 数。Chat Completions 错误返回 error.message/type/param/code；原 /infer 的回复结构继续兼容 ROS backend。
+
+常见失败：404 表示运行的是旧 HTTP 包或路由错误；vision_enabled=false 表示没有加载视觉图；400 可检查图片 base64、模型名及不支持的选项；413 表示整个请求超过1 MiB；429 表示同一 worker 正忙。更新时先停止本项目服务、备份再替换，部署脚本继续拒绝覆盖不同的已有文件。更新后 /health 缺少 model 或模型不符时，Stage 1 backend 会拒绝复用该服务。
+
+实现分工：上游 main.cc 加载视觉图、绑定图片上下文和视觉 token；上游 server.py 解码标准消息、管理图片临时文件、转换 OpenAI 响应；课程 stage1/deploy.py 只收集运行产物及整套模型，serve.sh 显式选择模型。课程不维护上游 C++ 工程副本。
+
+### 2026-10-15 生产目录更新验证
+
+- 同步了上游源码/dist、本工作树忽略的运行包与板端 `/data/local/workspace/stage1/qwen_infer`，逐文件SHA-256一致。补齐部署清单的run.py/models.json/vqa_client.py；Stage 1入口显式选择35B，backend核对健康接口的模型名和worker可执行文件。实际backend就绪检查返回0，通过backend.infer调用“1+1”返回2，文本接口回归通过。
+- 既有21 GB级模型和运行库没有重传；使用板上已有Qwen3.6-35B-A3B、驱动v1.4.0、TCIM v2.5.0。当前工作树没有模型缓存，本次没有执行整套模型部署。
+- PC通过18080→8080转发发送两张448×448矩形图片，同一句问题，红图回答red（0.868秒）、蓝图回答blue（0.815秒）；prompt_tokens均240，包含视觉展开。
+- 交错双图请求使用max_completion_tokens：正序红/蓝回答red,blue（2.231秒），交换图片后回答blue,red（1.415秒），prompt_tokens均456。非零temperature返回400及OpenAI风格error对象。
+- 运行课程本地包的vqa_client.py识别Gazebo画面中的红立方体（3.426秒、64输出tokens达到长度上限）；同时把路面黄色标记猜成支撑结构/阴影，说明语义回答仍会出错，不能当作可靠几何或物体身份判定。
+- 25项主机测试通过，3项因主机未安装Uvicorn跳过；板端实际Uvicorn启动和真实HTTP/VQA分别验证。Python语法、Shell语法、diff检查通过。当前平铺布局的完整ROS跨机聊天没有重跑。
+- 更新前的板端小文件备份位于 `/data/local/workspace/stage1/.backup-vqa-prod-sync-20261015/`，保留原服务控制入口。不自动配置开机启动。

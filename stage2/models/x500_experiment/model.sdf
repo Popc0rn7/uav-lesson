@@ -74,7 +74,7 @@
           </image>
           <clip>
             <near>.15</near>
-            <far>10</far>
+            <far>20</far>
           </clip>
         </camera>
         <topic>depth_camera</topic>

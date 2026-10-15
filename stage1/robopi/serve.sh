@@ -42,7 +42,7 @@ status="$(sh "$infer_dir/run.sh" --status)" || exit 1
 started=0
 case "$status" in
     RUNNING*|FOREGROUND*) ;;
-    *) sh "$infer_dir/run.sh" --serve --background --host 127.0.0.1 --port 8080 || exit 1; started=1 ;;
+    *) sh "$infer_dir/run.sh" --serve --background --model qwen3.6-35b-a3b --host 127.0.0.1 --port 8080 || exit 1; started=1 ;;
 esac
 if ! python3 -B "$app_dir/backend.py"; then
     [ "$started" -eq 0 ] || sh "$infer_dir/run.sh" --stop

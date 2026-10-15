@@ -86,3 +86,18 @@
 5. **语义任务**：模型适配、VQA、导航与 Jev 对照，形成可重复授课的完整流程。
 
 Stage 3 当前收束点：MID-360 视场与时间分片扫描近似、FAST-LIO2 的 30 Hz 配准点云及约 200 Hz IMU 传播状态已在本机跑通；带可选墙面立体标记的 2 m/s 往返通过，GNSS 融合关闭，飞控保留气压降落后备。原赛道纯 LIO、LIO 5 档、实机精确时序/标定、多轮成功率及 RoboPi 迁移仍待验证。旧配置证据独立保留；后续分工见 [开发交接](stage3/Development.md)。
+
+
+## Stage 5 扩展：语义目标跟随
+
+- [x] 独立 Gazebo 街区与可启动/停止/复位的红色方块车。
+- [x] 标准机相机、真实本地 DINO＋深度测距、粗体素局部空间与 Jev 建议链路。
+- [x] Jev 选择跟随行为、PX4 MAVLink Offboard 执行的 PC 初版：红色目标颜色/RGBD 跟踪，0.7 m/s 环路车辆，35 秒及60秒实际跟随；60秒同步评测水平间距中位数 7.92 m，高于车尾 2.16 m。
+- [ ] 严格正对车尾、完整一圈、多轮成功率、复杂遮挡和绕障执行、通用车辆/动物跟踪。
+- [ ] RoboPi 迁移与实机验证。
+
+- [x] 真实 Qwen3.6-35B-A3B 视觉规划→DINO→Jev→PX4 单阶段闭环：60秒任务、32次真实Jev调用无错误，Jev确认 completed；运动后半段真值水平距离中位数7.95 m、上方2.11 m。
+- [x] Qwen验收任务运行器：两阶段真实动态任务通过，Qwen分别accept；任务预算/timeout、预算外总结、进度与历史记账、redo/modify_stage/modify_plan通过受控协议及单元测试。
+- [ ] 搜索/绕障技能、复杂场景下重规划效果与多轮稳定性验证。
+
+架构、代码入口与[当前关键问题](stage5/Agent.md#9-当前仍存在的关键问题)见 [Agent介绍](stage5/Agent.md)；操作见 [Stage 5 Hands-on](stage5/Hands-on.md)，实测证据见 [Validation](stage5/Validation.md)。

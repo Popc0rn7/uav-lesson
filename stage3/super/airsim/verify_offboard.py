@@ -373,6 +373,8 @@ def main():
     with (args.state_dir/'runtime.lock').open('w') as lock:
         fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
         state = json.loads((args.state_dir/'state.json').read_text())
+        if state.get('ros_container'):
+            raise RuntimeError('当前为 SUPER 控制模式，拒绝并行 MAVLink 控制；先落地 down 后启动独立 PX4 配置')
         if state['phase'] != 'ready' or not ready(state):
             raise RuntimeError('当前管理实例未就绪')
         output=Path(state['run_dir'])/f'offboard-{time.time_ns()}.json'

@@ -11,6 +11,12 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+flight-review = [
+    "pymavlink>=2.4.50,<3",
+    "pyulog>=1.2,<2",
+    "numpy>=1.26,<3",
+    "matplotlib>=3.10,<4",
+]
 stage2 = [
     "numpy>=2.5.3",
     "pillow>=12.3.0",

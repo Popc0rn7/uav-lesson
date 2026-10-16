@@ -56,6 +56,10 @@ RUN git init /opt/px4_ws/src/px4_msgs \
        --executor sequential --cmake-args -DBUILD_TESTING=OFF \
     && rm -rf build log
 
+# AirSim 的轻量 RPC 客户端使用 MessagePack，不依赖旧 tornado/msgpack-rpc。
+RUN apt-get update && apt-get install -y --no-install-recommends python3-msgpack \
+    && rm -rf /var/lib/apt/lists/*
+
 # 镜像导出准备
 ARG HUMBLE_IMAGE
 LABEL org.opencontainers.image.title="uav-computer-ros-humble" \

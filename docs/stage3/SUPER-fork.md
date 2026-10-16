@@ -2,6 +2,10 @@
 
 核心源码唯一来源为 submodules/SUPER，远程仓库 https://github.com/Popc0rn7/SUPER-sim.git，开发分支 feat/sim。旧 thirdparty 工作副本及 /tmp 备份仅作迁移参照，不作为后续修改或 prepare 的源码来源。
 
+## AirSim 后续修复
+
+AirSim 集成继续使用同一核心来源；新增静止末端等待重规划（默认关闭）及 A* 裁剪目标返回 `REACH_HORIZON` 的修复。裁剪返回值问题及可独立运行的 CTest 入口见 [上游问题报告](SUPER-astar-clipped-goal-report.md)。运行产物、原交接包和诊断日志均不入库；本地提交以课程主仓库 gitlink 为准，下面保留初次迁移记录。
+
 ## 本轮迁入内容
 
 仅迁入三个核心包所需的 ROS 2 构建/编译兼容、仿真时钟与绝对 YAML 路径、最终目标静止保持、初次规划失败限频重试、路径分段、课程中心高度约束和 /tmp 日志路径。必要新增头文件与终点测试一并迁入。未迁入旧 ProjectAirSim、森林配置、搜索后备实验、诊断回放工具或无关脚本；源仓库原有文件保持原样。

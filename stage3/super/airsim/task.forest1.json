@@ -1,0 +1,85 @@
+{
+  "name": "AirSimNH 树林入口 1 m/s 短程去回",
+  "spawn_ned_m": [
+    42.6,
+    160.11,
+    0
+  ],
+  "spawn_yaw_deg": 0,
+  "waypoints_enu_m": [
+    [
+      -9.350000000000023,
+      33.529999999999994,
+      2
+    ],
+    [
+      0,
+      0,
+      2
+    ]
+  ],
+  "bounds_enu_min_m": [
+    -60,
+    -10,
+    0.2
+  ],
+  "bounds_enu_max_m": [
+    20,
+    250,
+    10
+  ],
+  "speed_m_s": 1.0,
+  "max_acc_m_s2": 2.0,
+  "takeoff_height_m": 2.0,
+  "hold_after_takeoff_s": 3.0,
+  "carrot_distance_m": 12.0,
+  "carrot_refresh_m": 6.0,
+  "waypoint_tolerance_m": 0.4,
+  "goal_tolerance_m": 0.3,
+  "leg_timeout_s": 180,
+  "mission_timeout_s": 450,
+  "finish": "land",
+  "lidar": {
+    "name": "Lidar1",
+    "position_frd_m": [
+      0,
+      0,
+      0
+    ],
+    "rotation_rpy_deg": [
+      0,
+      0,
+      0
+    ],
+    "range_min_m": 0.6,
+    "range_max_m": 45.0,
+    "voxel_m": 0.1,
+    "settings": {
+      "SensorType": 6,
+      "Enabled": true,
+      "Range": 50,
+      "PointsPerSecond": 200000,
+      "RotationsPerSecond": 10,
+      "NumberOfChannels": 16,
+      "VerticalFOVUpper": 15,
+      "VerticalFOVLower": -15,
+      "HorizontalFOVStart": -180,
+      "HorizontalFOVEnd": 180,
+      "DrawDebugPoints": false,
+      "DataFrame": "SensorLocalFrame"
+    }
+  },
+  "waypoint_mode": "stop",
+  "virtual_ground_height_m": -2.0,
+  "virtual_ceil_height_m": 11,
+  "camera_defaults": {
+    "CaptureSettings": [
+      {
+        "ImageType": 0,
+        "Width": 1920,
+        "Height": 1080,
+        "FOV_Degrees": 90
+      }
+    ]
+  }
+}

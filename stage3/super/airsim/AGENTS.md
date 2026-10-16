@@ -1,6 +1,6 @@
 # AirSim 替换后端的配置约定
 
-本目录属于 Stage 3 的 SUPER 流程，承载 Gazebo 的 AirSim 替换后端。宿主机运行打包场景，原 PX4/Gazebo Docker 镜像只运行 PX4 SITL，两边通过网络连接。当前往返任务复用 SUPER 的任务流程，尚未接入 SUPER 规划器。不要迁回 Stage 2，也不要把本目录的控制测试描述为 SUPER 避障验收。
+本目录属于 Stage 3 的 SUPER 流程，承载 Gazebo 的 AirSim 替换后端。宿主机运行打包场景，Docker 1 只运行 PX4 SITL，Docker 2 运行 ROS 2/SUPER。`runtime.super.json` 接入雷达、GNSS 配准、规划和航点；`runtime.example.json` 保留独立 PX4 控制测试。不要迁回 Stage 2；控制或短距离往返不等于树林避障验收。
 
 操作入口、预期现象、已知问题与实测证据只维护在 [README.md](README.md)。本文件指导 agent 怎样替用户配置新场景，不另维护一套启动流程。
 
@@ -11,12 +11,14 @@
 - runtime 路径支持 `~`；换机器使用该机器用户的 home。场景包实际放在其他位置时，修改 `scene_dir` 和对应 `binary`，不要为满足默认路径移动整个源码目录或混用 ProjectAirSim 场景。
 - 保留当前宿主机 AirSim＋Docker PX4 的边界。先核实 Docker 镜像、桌面/Vulkan、场景 ELF 和资源，再按会话授权启动；历史镜像 ID 与历史飞行证据不能替代本机验收。
 
-## 两份输入配置
+## 输入配置
 
 | 文件 | 消费者与职责 |
 | --- | --- |
-| `runtime.example.json` | `runtime.py` 默认读取的实际运行配置，虽名为 example，并非只供展示。指定场景目录、二进制、启动参数、settings 文件、PX4 镜像、容器及任务 |
+| `runtime.example.json` | 显式选择的独立 PX4 控制测试配置。指定场景目录、二进制、启动参数、settings 文件、PX4 镜像、容器及任务 |
 | `settings.json` | AirSim 原生设置的输入文件，指定 ViewMode、车辆和传感器等；由 runtime 配置的 settings 字段选用 |
+| `runtime.super.json` / `runtime.forest1.json` / `runtime.forest8.json` / `runtime.forest10.json` / `runtime.forest10-ab.json` / `runtime.forest15.json` | SUPER 双 Docker；super_task 选择任务文件，出生点/雷达/相机覆盖输入 settings，路径相对 runtime 文件 |
+| `task.*.json` | 出生点相对 ENU XYZ 路线、速度/加速度、stop/pass 航点策略、虚拟地图边界、超时与结束行为；运行读取启动快照 |
 
 `up` 会从这两份输入生成 `artifacts/airsim-runtime/<运行ID>/settings.json`，并把该文件作为唯一 `-settings=` 传给场景。不要修改生成文件、运行状态或历史报告来改变配置。task 使用 up 时保存的任务配置，不会即时重新读取后来修改的 JSON。
 
@@ -41,7 +43,7 @@
 
 当前仅支持 Linux、host 网络、单机及一对运行实例。换容器名不等于隔离端口。用户要求远程连接、多机、其他端口或车辆名时，需要同时适配 runtime、RPC 客户端、控制任务及 PX4 启动方式，不能只改 JSON。
 
-## 任务坐标与范围
+## 独立 PX4 测试坐标与范围
 
 - start_ned_m / goal_ned_m 是 **PX4 估计的本地 NED 坐标**，单位米：X 北、Y 东、Z 向下；−3 表示参考原点上方 3 m。不要照搬 Gazebo/SUPER 的 ENU 坐标，也不要把 AirSim 场景真值原点等同于 PX4 本地原点。
 - 当前任务不规划、不避障。先了解新场景的出生点附近空间，再选短距离目标；保留默认低速作为首轮配置，不把旧场景验收直接转移到新场景。
@@ -55,11 +57,13 @@
 在 PC 仓库根目录使用 `uv run stage3/super/airsim/runtime.py`，动作和完整操作见 README。新配置仅在 up 时用 `--config` 选择；更改输入后 down/up，task 不自动重载。
 
 - 修改前先 status，确认现有运行实例用途和飞行状态。只停止管理器记录且身份验证通过的进程/容器，不接管手动实例、不杀未知端口占用者。
-- up 顺序是宿主机场景 → 检查该进程的 TCP 监听 → PX4 Docker → 连续传感器、有效定位、健康状态与 RPC 检查。不要用连接 4560 的探测消耗 AirSim 的 accept。
+- up 顺序是宿主机场景 → 检查该进程的 TCP 监听 → PX4 Docker → 连续传感器、有效定位、健康状态与 RPC 检查；SUPER 模式再启动 Docker 2，检查时钟/点云/非空地图。不要用连接 4560 的探测消耗 AirSim 的 accept。
 - 端口检查需区分真实占用、TIME_WAIT 与权限/沙箱错误。不能把所有 OSError 写成“已占用”，也不能仅凭没有 LISTEN 就宣称没有 TCP 状态。
-- 启动失败只清理本次创建的资源，保留日志。down 默认拒绝停止未解除解锁的实例；force 仅是用户显式选择的仿真停止操作，不作为正常重启流程。
+- 启动失败只清理本次创建的资源，保留日志。down 默认拒绝停止未解除解锁的实例；碰撞、失控或 Land 卡住时，用户请求恢复即授权对已核实实例使用 stop/down --force，不要求先正常降落或重复确认。stop 是仿真急停，不记作降落验收；正常重启仍先落地解除解锁。status/land/stop 必须在任务占锁时可用，急停不接管启动中的 up 或未知资源。
 - 先验证启动和静止链路；按授权做任务时记录起飞、往返、悬停误差、降落与解除解锁。没有运行条件就报告未验证，不能以 JSON/语法检查替代实际验收。
 - 当前已接受初始化 Unsupported main mode 为该 SITL 组合的已知非阻塞警告，不额外设置 SYS_HITL 或手动开启 HIL，不以消除该警告作为换场景的目标。其他新错误仍单独诊断。
-- 进入 PX4 的 IMU、气压计、磁力计和 GPS 属于接入验收范围；相机、雷达及场景全局真值接口仅在用户要求时扩展。不要为单纯换场景启动 ROS、规划器或板端流程。当前主线另要求验证 PX4 Offboard，为后续 SUPER 合并准备；AirSim 直接对接 ROS 2 Docker 的工作由其他开发者负责，本轮不改动该链路及 Gazebo/SUPER 控制代码。
+- SUPER 合并已由用户授权：三职责分离，定位用 PX4/GNSS，完整 XYZ 位置/速度/加速度执行；航点/carrot 只发任务目标。雷达按采集时刻的 PX4 位姿/外参配准，禁止真值反馈。统一仿真时间，通信看门狗用单调墙钟。任务/出生点/速度从输入配置读取，默认入口采用用户已确认的 forest10（10 m/s）；A→B 单目标对照显式选择 runtime.forest10-ab.json。保留现有 Gazebo 流程。
+- AirSim 当前按用户确认采用 GPS `UpdateLatency=0.2` 秒、`SENS_GPS0_DELAY=200` 毫秒及姿态参考前馈 `MC_REF_FF=1`，统一由本目录 settings.json 加载；不要迁入 Gazebo 或把定位补偿解释成删除传感器延迟。开启前馈不等于理想状态反馈；真值仍不得进入 PX4/SUPER 控制。新参数需 down/up，飞行前及复盘以实际 PX4 参数/ULog 确认，验收范围见 README。
+- 每轮飞行结束（含失败）必须查看自动 `.review.*` 与对应 ULog，按 README 的复盘顺序报告参考/时序、估计、位置/速度/姿态/角速度跟踪和执行余量。区分证据与假设，排除撞后数据；未确认解除解锁不得写作已安全降落。固定路线/策略/资源，每轮只改一个因素，不凭成败直接调 PID。
 
 日志、生成设置、状态与任务报告留在忽略 Git 的 artifacts 目录，不提交场景包、二进制、ULog、运行日志或凭据。更新 README 中的场景适用范围和证据；涉及 Stage 3 流程边界时同步 docs/stage3 的入口链接，不重复维护操作说明。

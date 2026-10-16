@@ -1,5 +1,7 @@
 """PC：对本机 AirSim 的 MessagePack RPC 调用；每次调用使用独立连接。"""
-import socket,msgpack,json
+import socket
+
+import msgpack
 
 def rpc(method,*args,timeout=10):
     with socket.create_connection(('127.0.0.1',41451),timeout=timeout) as s:

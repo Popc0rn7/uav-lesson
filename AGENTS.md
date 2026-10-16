@@ -20,6 +20,7 @@
 
 - `stage3/jev.py` 已提供 Jev Decisions API 包装，`stage3/demo.py` 是文本情感决策示例。
 - Stage 3 当前默认为 SUPER＋PX4/GNSS 定位，Humble Docker 与 PX4/Gazebo Docker 运行无附加标记的实体走廊；2 m/s 往返与 Gazebo＋点云 RViz＋ROG 体素地图 RViz 三窗口已验收。FAST-LIO2 为显式对照，提供约 30 Hz 配准点云与 200 Hz IMU 传播；带标记往返及持续雷达失流降落已验收，原赛道纯 LIO 完整往返仍失败。当前已移除固定高度投影、加高墙柱到 8 m，起飞高度 1.95 m；新场景 XYZ 执行已通过 2 m/s 一次往返，5 m/s XYZ、含悬空障碍三维避障、LIO 5 档、实机与板端待验证。入口、证据和并行开发边界见 docs/stage3/Development.md。
+- AirSim 替换后端位于 `stage3/super/airsim/`；PC 场景＋PX4 Docker＋Humble SUPER Docker，默认 forest10（10 m/s）八航点。单目标 `runtime.forest10-ab.json` 保持 20 m 规划距离，已修正 A* 裁剪终点返回值并通过真实搜索回归；实飞已连续重规划，但碰撞中止，约 235 m 长任务未验收。入口与证据见该目录 README，上游问题报告见 `docs/stage3/SUPER-astar-clipped-goal-report.md`。
 - Stage 1 常驻模型 ROS 聊天链路已有旧布局实测记录；当前文件重组后的部署尚待重新验收。自主飞行 API 和 PC 聊天 GUI 尚未实现。
 - Stage 2 标准机为 `x500_experiment`（Orbbec Gemini 2 RGBD 几何近似＋MID-360S 规则 GPU 扫描近似），引用独立 `mid360s` 模型；启动时两个模型目录均需挂载。四图基础展示已获用户确认，改装后完整飞行仍待验收；操作与实测证据分别见 `docs/stage2/Hands-on.md`、`docs/stage2/Validation.md`。
 - 路线与完成状态见 `docs/roadmap.md`。只有实际可运行并有验证证据的功能才标记完成。

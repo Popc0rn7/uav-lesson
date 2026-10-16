@@ -112,6 +112,8 @@ def land(state):
 
 
 def run_task(state):
+    if state.get('ros_container'):
+        raise RuntimeError('SUPER 模式不能同时启动 AirSim RPC 控制任务')
     config = state["config"]["task"]
     validate(config)
     flight = Flight(state)

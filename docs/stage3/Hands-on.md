@@ -38,7 +38,7 @@ docker run --rm --network none uav-computer-ros-humble:local \
 
 ## AirSim 替换后端（PC）
 
-入口位于 `stage3/super/airsim/`，使用宿主机 AirSim 场景和原 PX4 Docker 镜像，复用本阶段起飞—往返—降落流程。当前先验证 PX4 控制，不启动 SUPER 规划器；配置、up/task/down、预期现象与排查统一见 [AirSim 操作说明](../../stage3/super/airsim/README.md)。下文仍为现有 Gazebo/SUPER 流程。
+入口位于 `stage3/super/airsim/`，提供宿主机 AirSim＋Docker 1 PX4＋Docker 2 ROS/SUPER：GNSS 定位、雷达配准、ROG 地图和航点任务。默认入口为 10 m/s 八航点 forest10，`runtime.super.json` 保留低速回归；单目标 10-ab 保持 20 m 规划距离，已修复裁剪返回值但长任务仍未验收；独立 PX4 控制测试仍保留。配置、up/task/down、验收范围与排查统一见 [AirSim 操作说明](../../stage3/super/airsim/README.md#super-双-docker-合并入口)。下文仍为现有 Gazebo/SUPER 流程。
 
 ## 启动和数据检查（PC）
 

@@ -1,5 +1,13 @@
 # Stage 3 实测记录
 
+## 2026-10-15：AirSim GPS 补偿与姿态前馈
+
+AirSim 专用配置已按用户确认采用 GPS 延迟补偿 200 ms 与 `MC_REF_FF=1`；完整 SUPER 低速短程及树林单程约 35 m 去回均已确认落地解除解锁。配置、实飞复盘、手动启动和未验证范围统一见 [AirSim README](../../stage3/super/airsim/README.md#super-双-docker-合并入口)。不改变 Gazebo 基线，不把单次低速跟随拟合当作实机或高速验收。
+
+## 2026-10-14：AirSim＋PX4＋SUPER 合并
+
+AirSim 交接包已按感知、航点任务、PX4 控制三职责接入双 Docker；1 m/s 短距离往返、树林约 35 m 去回，以及雷达/规划器/时钟失流降落通过。具体配置、镜像/源码版本、误差、速度、报告路径和未验证范围统一维护在 [AirSim 本轮合并验证](../../stage3/super/airsim/README.md#本轮合并验证)。本轮结果不替代下文 Gazebo 固定赛道或高速档验收。
+
 ## 2026-10-10：SUPER Humble 双 Docker 单机闭环
 
 本次在当前 PC 实际构建、启动并执行虚拟飞行；没有连接 RoboPi 或实体飞控，没有调用模型/API。

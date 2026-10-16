@@ -1,0 +1,37 @@
+{
+  "SettingsVersion": 1.2,
+  "SimMode": "Multirotor",
+  "ClockType": "SteppableClock",
+  "ClockSpeed": 1.0,
+  "ViewMode": "FlyWithMe",
+  "Vehicles": {
+    "PX4": {
+      "VehicleType": "PX4Multirotor",
+      "UseSerial": false,
+      "UseTcp": true,
+      "LockStep": true,
+      "LocalHostIp": "127.0.0.1",
+      "ControlIp": "127.0.0.1",
+      "TcpPort": 4560,
+      "ControlPortLocal": 14540,
+      "ControlPortRemote": 14580,
+      "Parameters": {
+        "SENS_GPS0_DELAY": 200,
+        "MC_REF_FF": 1.0,
+        "MPC_XY_VEL_MAX": 16.0
+      },
+      "Sensors": {
+        "gps": {
+          "SensorType": 3,
+          "Enabled": true,
+          "UpdateLatency": 0.2
+        },
+        "Barometer": {
+          "SensorType": 1,
+          "Enabled": true,
+          "PressureFactorSigma": 0.0001825
+        }
+      }
+    }
+  }
+}

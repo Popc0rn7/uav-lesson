@@ -15,7 +15,16 @@
       "TcpPort": 4560,
       "ControlPortLocal": 14540,
       "ControlPortRemote": 14580,
+      "Parameters": {
+        "SENS_GPS0_DELAY": 200,
+        "MC_REF_FF": 1.0
+      },
       "Sensors": {
+        "gps": {
+          "SensorType": 3,
+          "Enabled": true,
+          "UpdateLatency": 0.2
+        },
         "Barometer": {
           "SensorType": 1,
           "Enabled": true,

@@ -1,0 +1,14 @@
+{
+  "line_distance_m": 1.0,
+  "line_duration_s": 4.0,
+  "hold_s": 2.0,
+  "figure8_duration_s": 16.0,
+  "figure8_amplitude_m": 1.0,
+  "takeoff_height_m": 2.0,
+  "tracking_error_limit_m": 0.8,
+  "tracking_error_hold_sim_s": 0.25,
+  "max_reference_speed_m_s": 1.5,
+  "max_reference_acceleration_m_s2": 2.5,
+  "horizontal_envelope_m": 3.0,
+  "mission_timeout_wall_s": 180.0
+}

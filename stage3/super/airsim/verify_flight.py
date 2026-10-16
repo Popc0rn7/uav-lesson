@@ -1,10 +1,20 @@
 from rpc_client import rpc
 import time,json,math,concurrent.futures,argparse,subprocess,re
+import fcntl
+from pathlib import Path
 parser=argparse.ArgumentParser(description="PC：AirSim/PX4 低速仿真飞行检查；不适用于实机")
 parser.add_argument("--run",action="store_true",help="执行解锁和飞行")
 parser.add_argument("--output",default="/tmp/airsim-flight-check.json")
+parser.add_argument('--state-dir',type=Path,default=Path(__file__).resolve().parents[3]/'artifacts/airsim-runtime')
 args=parser.parse_args()
 if not args.run: parser.error("飞行检查必须显式传入 --run")
+control_lock=(args.state_dir/'runtime.lock').open('w')
+fcntl.flock(control_lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+run_state=json.loads((args.state_dir/'state.json').read_text())
+if run_state.get('ros_container'):
+    parser.error('SUPER 模式拒绝同时启动 AirSim RPC 控制；先落地 down 后选独立 PX4 配置')
+if run_state['container']!='uav-airsim-px4' or run_state['phase']!='ready':
+    parser.error('该历史诊断仅用于就绪的默认 PX4 管理实例')
 out=args.output
 records=[]
 original_parameters={}

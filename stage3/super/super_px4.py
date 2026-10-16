@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """ROS Docker：SUPER ENU 命令 → PX4 NED；只用于单机 SITL。"""
 import math
+from pathlib import Path as FilePath
 import time
 import rclpy
 from rclpy.node import Node
@@ -22,12 +23,22 @@ class Bridge(Node):
         super().__init__('super_px4_bridge')
         self.declare_parameter('corridor', False)
         self.declare_parameter('speed', 2.0)
+        task_path = self.declare_parameter('airsim_task_config', '').value
+        self.airsim_task = None
+        self.land_request = FilePath(task_path).parent/'land.request.json' if task_path else None
+        if task_path:
+            from airsim.task_config import load_task
+            self.airsim_task = load_task(task_path)
         self.use_lio=self.declare_parameter('use_lio',False).value
         self.height_required=self.declare_parameter('lidar_height_required',True).value
         self.corridor = self.get_parameter('corridor').value
         self.speed_limit = self.get_parameter('speed').value + 1.0
         self.takeoff_height = 1.95 if self.corridor else 2.0
         self.origin = None if self.corridor else [0.,0.,0.]
+        if self.airsim_task:
+            self.origin = None
+            self.takeoff_height = self.airsim_task['takeoff_height_m']
+            self.speed_limit = self.airsim_task['speed_m_s'] + 1.0
         self.p = self.v = self.vehicle = self.hold = self.sample = None
         self.odom_at = self.status_at = self.sample_at = self.cloud_at = 0.
         self.height_at=0.
@@ -95,7 +106,7 @@ class Bridge(Node):
                 return
             # Anchor the course frame using PX4 alone and the known resting base height.
             # Gazebo truth is never an input to the control bridge.
-            self.origin=[raw_p[0],raw_p[1],raw_p[2]-.25]
+            self.origin=[raw_p[0],raw_p[1],raw_p[2]-(0. if self.airsim_task else .25)]
         elif self.corridor and self.mode == 'idle' and self.vehicle is not None and self.ready() and self.vehicle.arming_state != self.vehicle.ARMING_STATE_ARMED:
             self.origin=[raw_p[0],raw_p[1],raw_p[2]-.25]
         if self.use_lio:return
@@ -173,7 +184,7 @@ class Bridge(Node):
         self.failsafe=msg;self.flags_at=time.monotonic()
 
     def ready(self):
-        if not self.corridor:return self.vehicle is not None and self.vehicle.pre_flight_checks_pass
+        if not (self.corridor or self.airsim_task):return self.vehicle is not None and self.vehicle.pre_flight_checks_pass
         if self.failsafe is None or time.monotonic()-self.flags_at>1.5:return False
         invalid=('angular_velocity_invalid','attitude_invalid','local_altitude_invalid','local_position_invalid',
                  'local_velocity_invalid','battery_unhealthy','fd_critical_failure','fd_esc_arming_failure',
@@ -181,6 +192,8 @@ class Bridge(Node):
         return not any(getattr(self.failsafe,key) for key in invalid)
 
     def land(self, reason):
+        if self.airsim_task and self.mode == 'land':
+            return
         self.mode,self.reason,self.sample,self.goal = 'land',reason,None,None
         self.send(VehicleCommand.VEHICLE_CMD_NAV_LAND)
 
@@ -188,7 +201,11 @@ class Bridge(Node):
         if msg.data == 'land':
             self.land('requested landing')
         elif msg.data == 'takeoff' and self.mode == 'idle' and self.p and self.vehicle and self.origin is not None:
+            if self.land_request and self.land_request.exists():
+                self.reason='takeoff rejected: operator cancelled this run';return
             if not self.ready():self.reason='takeoff rejected: local estimate unavailable';return
+            if self.airsim_task and time.monotonic()-self.cloud_at>.3:
+                self.reason='takeoff rejected: stale lidar';return
             if self.corridor and self.height_required and time.monotonic()-self.height_at>.3:
                 self.reason='takeoff rejected: stale lidar height';return
             if self.vehicle.arming_state == self.vehicle.ARMING_STATE_ARMED or time.monotonic()-self.odom_at>.5:
@@ -200,17 +217,22 @@ class Bridge(Node):
 
     def goal_received(self,msg):
         p=msg.pose.position
-        if self.mode != 'hover' or msg.header.frame_id != 'world' or not all(math.isfinite(x) for x in (p.x,p.y,p.z)):
+        allowed = ('hover','planning','track') if self.airsim_task else ('hover',)
+        if self.mode not in allowed or msg.header.frame_id != 'world' or not all(math.isfinite(x) for x in (p.x,p.y,p.z)):
             return
         bounds = (abs(p.x)<=2.5 and -.5<=p.y<=100.5 and .5<=p.z<=12.0) if self.corridor else (abs(p.x)<=10 and abs(p.y)<=10 and .5<=p.z<=5)
+        if self.airsim_task:
+            from airsim.task_config import inside
+            bounds = inside(self.airsim_task, [p.x,p.y,p.z])
         if not bounds or time.monotonic()-self.cloud_at>.5:
             self.reason='goal rejected: bounds or stale lidar'
             return
         msg.header.stamp=self.get_clock().now().to_msg()
         self.goal=[p.x,p.y,p.z]
         self.goal_stable=None
-        self.sample=None
-        self.mode,self.reason,self.started='planning','waiting for SUPER',time.monotonic()
+        if not (self.airsim_task and self.mode == 'track'):
+            self.sample=None
+            self.mode,self.reason,self.started='planning','waiting for SUPER',time.monotonic()
         self.goal_pub.publish(msg)
 
     def accept(self,msg):
@@ -221,8 +243,11 @@ class Bridge(Node):
         valid=all(math.isfinite(x) for x in p+v+a) and -.05<=age<=.3
         # Preserve the full SUPER trajectory, including vertical feedforward.
         bounds = (abs(p[0])<=2.5 and -1<=p[1]<=101 and .2<=p[2]<=12.0) if self.corridor else (abs(p[0])<=10 and abs(p[1])<=10 and .2<=p[2]<=5)
+        if self.airsim_task:
+            from airsim.task_config import inside
+            bounds = inside(self.airsim_task, p)
         valid=valid and bounds
-        valid=valid and math.dist(v,[0,0,0])<=self.speed_limit and math.dist(a,[0,0,0])<=6.
+        valid=valid and math.dist(v,[0,0,0])<=self.speed_limit and math.dist(a,[0,0,0])<=(self.airsim_task['max_acc_m_s2']+.5 if self.airsim_task else 6.)
         valid=valid and self.p is not None and math.dist(p,self.p)<=3.
         if not valid:
             self.land(f'SUPER command rejected: p={p}, v={v}, a={a}, age={age:.4f}, error={math.dist(p,self.p) if self.p else -1:.3f}'); return
@@ -232,9 +257,13 @@ class Bridge(Node):
     def tick(self):
         wall=time.monotonic(); now=self.get_clock().now().nanoseconds/1e9
         active=self.mode in ('prestream','takeoff','hover','planning','track')
-        if self.mode=='idle' and self.corridor:
+        if active and self.land_request and self.land_request.exists():
+            self.land('operator requested landing');active=False
+        if self.mode=='idle' and (self.corridor or self.airsim_task):
             local_ready=self.ready() and self.p and self.origin is not None and wall-self.odom_at<.3 and wall-self.cloud_at<.3 and (not self.height_required or wall-self.height_at<.3)
             self.reason='local_ready; send takeoff' if local_ready else 'waiting for healthy local estimate and lidar'
+            if self.land_request and self.land_request.exists():
+                self.reason='operator cancelled this run; down/up required'
         if now!=self.clock_last:
             if self.clock_last is not None and now<self.clock_last and active:
                 self.land('simulation reset');active=False
@@ -244,7 +273,7 @@ class Bridge(Node):
             self.land('state or clock timeout');active=False
         if active and self.corridor and self.height_required and wall-self.height_at>.5:
             self.land('lidar height timeout');active=False
-        if active and self.corridor and not self.ready():
+        if active and (self.corridor or self.airsim_task) and not self.ready():
             self.land('local estimate unavailable');active=False
         if active and self.mode not in ('prestream','takeoff') and self.vehicle.nav_state!=self.vehicle.NAVIGATION_STATE_OFFBOARD:
             self.land('PX4 left Offboard');active=False
@@ -266,6 +295,8 @@ class Bridge(Node):
         if self.mode=='track' and wall-self.sample_at>.5:
             self.land('SUPER command timeout');active=False
         if self.mode=='track' and wall-self.cloud_at>.5:
+            self.land('lidar cloud timeout');active=False
+        if active and self.airsim_task and wall-self.cloud_at>.5:
             self.land('lidar cloud timeout');active=False
         if self.mode=='track' and self.goal and self.p:
             if math.dist(self.p,self.goal)<.3 and math.dist(self.v,[0.,0.,0.])<.3:

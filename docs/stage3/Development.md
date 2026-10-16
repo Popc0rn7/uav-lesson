@@ -11,8 +11,8 @@ SUPER 相关代码统一放在 `stage3/super/`：包含运行入口、控制与�
 ## 当前交付
 
 - SUPER 的 ROS 2 Humble 核心、perfect_drone_sim 竞速入口，以及 PX4/Gazebo 实体走廊入口。
-- AirSim 替换后端位于 `stage3/super/airsim/`：宿主机场景与原 PX4 镜像由统一入口管理。本机 AirSimNH 已验证传感器、RPC 往返、独立 MAVLink Offboard XYZ 及设定值停流降落；仍未接入 SUPER 规划器。AirSim 直接对接 ROS 2 Docker 由其他开发者负责，本轮仅处理 PX4 侧及合并接口，不改动该链路。操作、兼容问题、参数适用范围与证据统一见 [AirSim README](../../stage3/super/airsim/README.md#本机-airsimnhpx4-主线验收与合并接口2026-10-14)。
-- AirSimNH 控制速度档：2 m 半径圆周的 1 m/s 两圈通过；2 m/s 实测峰值约 2.45 m/s，但跟踪误差超过 0.8 m 后中止并降落，3 m/s 未执行。动力学与控制调参按本轮约定暂不继续，不将未通过项写成已验收；后续合并仍需独立完成感知、时钟、DDS 和 SUPER 避障验证。
+- AirSim 替换后端位于 `stage3/super/airsim/`：已合入交接包感知、ROG 配置、航点/carrot 和 RViz，宿主机 AirSim＋Docker 1 PX4＋Docker 2 ROS/SUPER。PX4/GNSS 定位、采集时刻点云配准、同源仿真时钟和完整 XYZ 执行；AirSim 当前采用 GPS 200 ms 延迟补偿与姿态参考前馈 `MC_REF_FF=1`；完整 SUPER 1 m/s 短距离往返与降落已通过，测量时间对齐位置误差 P95 约 0.13 m、最大约 0.14 m；相同模式的 1 m/s 树林单程约 35 m 去回也已完成并解除解锁。操作、证据与未验证范围统一见 [AirSim README](../../stage3/super/airsim/README.md#super-双-docker-合并入口)。默认 AirSim 入口现为用户确认的 forest10（10 m/s）；10-ab 单目标修复与失败边界见文末。8/15 m/s 对照配置显式选择。
+- AirSimNH 控制速度档：独立 2 m 半径圆周的 1 m/s 两圈通过；2 m/s 实测峰值约 2.45 m/s，但跟踪误差超过 0.8 m 后中止并降落，3 m/s 未执行。早期未开姿态前馈的合并版本中，1 m/s 树林约 35 m 去回通过一次，最大跟踪误差 0.343 m，轨迹高度 1.424～3.500 m；雷达、规划器与时钟停流降落均通过。这些早期记录未调 PX4 增益/动力学，不把不同路线、不同控制配置的结果当作高速或多轮验收。
 - 默认走廊为 PX4/GNSS 定位、无附加墙面标记；雷达点云经 PX4 位姿变换后由 ROG-Map 积累为局部占据体素图，另有规划使用的膨胀体素图。点云 RViz 单独展示实时回波，地图 RViz 同时展示占据体素与安全膨胀区域；Gazebo 是第三个窗口。
 - Jev 文本示例保持原有状态；没有新增 Jev 飞行或付费 API 调用。
 
@@ -56,3 +56,6 @@ submodules/SUPER/ 保存核心源码，thirdparty/ 保存本机构建产物和�
 本轮代码语法、模型 XML、Python 六项几何/视场测试与先前 C++ CTest 已通过。最终飞行与失流结果见 Validation。持续失流气压后备专项已按相同最终配置补测通过；没有进行板端部署或将其他配置写成已验收。
 
 2026-10-13 提交前复核：Stage 3 Python 语法检查、六项几何/视场测试、原生 C++ 扫描方向测试，以及两个 RViz YAML 的解析和地图/点云话题分离检查均通过。现有仿真容器已停止，使用本地 Humble 镜像离线运行测试；没有重新飞行，三窗口往返证据沿用 Validation 中的 2026-10-12 记录。后续首先考虑完整 XYZ 轨迹执行与三维障碍验收，再推进板端和算法对照。
+
+
+2026-10-15 单目标进展：AirSim 默认入口按用户确认选择 forest10；新增显式 10-ab 单远端目标对照，任务层不再发送 carrot。A* 窗口外裁剪目标搜到后返回 `REACH_HORIZON`，真实目标语义不变；五次真实搜索回归及修复前负对照、增量编译通过。10-ab 实飞已能初次规划和连续重规划，但约前 16 m 处碰撞树木后中止，最终降落解除武装；未到 B，不算长任务通过。操作、证据与复盘边界见 [AirSim README](../../stage3/super/airsim/README.md#单目标裁剪返回值修复与-10-ab-实测2026-10-15)。

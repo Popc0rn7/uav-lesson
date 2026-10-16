@@ -1,0 +1,144 @@
+--- a/super_planner/src/super_core/super_planner.cpp
++++ b/super_planner/src/super_core/super_planner.cpp
+@@ -1,3 +1,4 @@
++#include "utils/header/stage3_profile.hpp"
+ /**
+ * This file is part of SUPER
+ *
+@@ -102,6 +103,7 @@
+     SuperPlanner::PlanFromRest(const Vec3f &goal_p,
+                                const double &goal_yaw,
+                                const bool &new_goal) {
++        stage3_profile::Scope profile_scope("PlanFromRest");
+         std::lock_guard<std::mutex> guard(replan_lock_);
+         latest_replan.reset();
+         latest_replan.setGoal(goal_p, goal_yaw, robot_state_);
+@@ -198,6 +200,8 @@
+     SuperPlanner::ReplanOnce(const Vec3f &goal_p,
+                              const double &goal_yaw,
+                              const bool &new_goal) {
++        stage3_profile::Scope profile_scope("ReplanOnce");
++        const double replan_sim_start = ros_ptr_->getSimTime();
+         TimeConsuming replan_total_t("ReplanOnce", false);
+         std::lock_guard<std::mutex> guard(replan_lock_);
+ 
+@@ -264,8 +268,20 @@
+         }
+ 
+         double replan_dt = replan_total_t.stop();
+-        if (replan_dt > cfg_.replan_forward_dt * 0.9) {
+-            ros_ptr_->warn(" -- [SUPER] in [ReplanOnce]: Replan overtime, check parameters, replan dt = {}.", replan_dt);
++        const double replan_sim_dt = ros_ptr_->getSimTime() - replan_sim_start;
++        // Optional slower-than-real-time simulation: retain trajectory lookahead,
++        // enforce simulation-time freshness AND a finite wall-clock compute cap.
++        const bool over_budget = cfg_.replan_wall_limit > 0
++            ? (replan_dt > cfg_.replan_wall_limit || replan_sim_dt < 0 ||
++               replan_sim_dt > cfg_.replan_forward_dt * 0.9)
++            : replan_dt > cfg_.replan_forward_dt * 0.9;
++        if (over_budget) {
++            ros_ptr_->warn(" -- [SUPER] timing gate: wall={} s, sim={} s, optional wall cap={} s, forward={} s.",
++                           replan_dt, replan_sim_dt, cfg_.replan_wall_limit, cfg_.replan_forward_dt);
++            ros_ptr_->warn(" -- [SUPER] in [ReplanOnce]: Replan overtime, check parameters, replan dt = {}; exp_front = {}, exp_opt = {}, back_front = {}, back_opt = {}, viz = {}.",
++                           replan_dt, time_consuming_[EPX_TRAJ_FRONTEND], time_consuming_[EXP_TRAJ_OPT],
++                           time_consuming_[BACK_TRAJ_FRONTEND], time_consuming_[BACK_TRAJ_OPT],
++                           time_consuming_[VISUALIZATION]);
+             return FAILED;
+         }
+ 
+@@ -410,6 +426,7 @@
+ 
+ 
+     RET_CODE SuperPlanner::generateExpTraj(ExpTraj &last_exp_traj_info, ExpTraj &out_exp_traj_info) {
++        stage3_profile::Scope profile_scope("generateExpTraj");
+         /* 1) Log the exp traj frontend time*/
+         TimeConsuming t_exp_frontend("t_exp_frontend", false);
+ 
+@@ -861,6 +878,7 @@
+     }
+ 
+     RET_CODE SuperPlanner::generateBackupTrajectory(ExpTraj &ref_exp_traj, BackupTraj &back_traj_info) {
++        stage3_profile::Scope profile_scope("generateBackupTrajectory");
+         drone_state_mutex_.lock();
+         back_traj_info.setRobotPos(robot_state_.p);
+         drone_state_mutex_.unlock();
+--- a/super_planner/include/super_core/config.hpp
++++ b/super_planner/include/super_core/config.hpp
+@@ -63,6 +63,7 @@
+         int obs_skip_num;
+         double corridor_bound_dis, corridor_line_max_length;
+         double replan_forward_dt;
++        double replan_wall_limit; // <=0 keeps the original wall-clock gate
+         double sample_traj_dt;
+         double robot_r;
+         int iris_iter_num;
+@@ -94,6 +95,7 @@
+             loader.LoadParam("super_planner/sensing_horizon", sensing_horizon, 3.0);
+             loader.LoadParam("super_planner/obs_skip_num", obs_skip_num, 1);
+             loader.LoadParam("super_planner/replan_forward_dt", replan_forward_dt, 0.3);
++            loader.LoadParam("super_planner/replan_wall_limit", replan_wall_limit, -1.0);
+             loader.LoadParam("super_planner/corridor_bound_dis", corridor_bound_dis, 3.0);
+             loader.LoadParam("super_planner/corridor_line_max_length", corridor_line_max_length, 3.0);
+             loader.LoadParam("super_planner/planning_horizon", planning_horizon, 10.0);
+--- a/super_planner/src/super_core/astar.cpp
++++ b/super_planner/src/super_core/astar.cpp
+@@ -1,3 +1,4 @@
++#include "utils/header/stage3_profile.hpp"
+ #include <super_core/stage3_height.h>
+ /**
+ * This file is part of SUPER
+@@ -235,6 +236,7 @@
+     RET_CODE Astar::pointToPointPathSearch(const rog_map::Vec3f &start_pt, const rog_map::Vec3f &end_pt,
+                                            const int &flag, const double &searching_horizon,
+                                            rog_map::vec_Vec3f &out_path, const double &time_out) {
++        stage3_profile::Scope profile_scope("Astar");
+         RET_CODE setup_ret = setup(start_pt, end_pt, flag, searching_horizon);
+         if (setup_ret != SUCCESS) {
+             return setup_ret;
+--- /dev/null
++++ b/super_planner/include/utils/header/stage3_profile.hpp
+@@ -0,0 +1,45 @@
++#pragma once
++// Optional diagnostic only: clocks are local to this process/host.
++#include <ctime>
++#include <cstdlib>
++#include <cstdint>
++#include <fstream>
++#include <mutex>
++namespace stage3_profile {
++inline int64_t ns(clockid_t clock) {
++    timespec value{};
++    return clock_gettime(clock, &value)==0 ? int64_t(value.tv_sec)*1000000000LL+value.tv_nsec : -1;
++}
++struct Sink {
++    std::ofstream stream;
++    std::mutex mutex;
++    Sink() {
++        const char *path=std::getenv("SUPER_PROFILE_PATH");
++        if (path && *path) stream.open(path, std::ios::app);
++    }
++};
++inline Sink &sink() { static Sink value; return value; }
++class Scope {
++    const char *name_;
++    bool enabled_;
++    int64_t wall_=0, cpu_=0, process_=0;
++public:
++    explicit Scope(const char *name): name_(name), enabled_(sink().stream.is_open()) {
++        if (enabled_) {
++            wall_=ns(CLOCK_MONOTONIC);
++            cpu_=ns(CLOCK_THREAD_CPUTIME_ID);
++            process_=ns(CLOCK_PROCESS_CPUTIME_ID);
++        }
++    }
++    ~Scope() {
++        if (!enabled_) return;
++        const auto cpu=ns(CLOCK_THREAD_CPUTIME_ID), process=ns(CLOCK_PROCESS_CPUTIME_ID), end=ns(CLOCK_MONOTONIC);
++        auto &output=sink();
++        std::lock_guard<std::mutex> guard(output.mutex);
++        output.stream << "{\"scope\":\"" << name_ << "\",\"start_ns\":" << wall_
++            << ",\"end_ns\":" << end << ",\"wall_ns\":" << end-wall_
++            << ",\"thread_cpu_ns\":" << (cpu_<0 || cpu<0 ? -1 : cpu-cpu_)
++            << ",\"process_cpu_ns\":" << (process_<0 || process<0 ? -1 : process-process_) << "}\n";
++    }
++};
++}

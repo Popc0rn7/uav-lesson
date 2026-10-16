@@ -43,7 +43,7 @@ class Probe(Node):
         if not telemetry_only:
             for topic, key in [('/cloud_registered','cloud'), ('/rog_map/occ','map'), ('/rog_map/inf_occ','inflated')]:
                 self.create_subscription(PointCloud2, topic, lambda m, k=key: self.save(k,m), qos_profile_sensor_data)
-        for topic, key in [('/stage3/uav1/status','control'),('/stage3/uav1/task_status','task'),('/stage3/uav1/sensors','sensors')]:
+        for topic, key in [('/stage3/uav1/status','control'),('/stage3/uav1/task_status','task'),('/stage3/uav1/sensors','sensors'),('/stage3/uav1/raw_sensors','raw_sensors')]:
             self.create_subscription(String, topic, lambda m, k=key: self.save(k,m), 10)
         self.create_subscription(VehicleStatus, '/fmu/out/vehicle_status_v4', lambda m: self.save('vehicle',m), qos_profile_sensor_data)
         self.create_subscription(PositionCommand, '/planning/pos_cmd', lambda m: self.save('cmd',m), qos_profile_sensor_data)
@@ -98,6 +98,9 @@ class Probe(Node):
 
     def poll_collision(self):
         control = self.latest.get('control', String()).data
+        vehicle = self.latest.get('vehicle')
+        if (vehicle and vehicle.nav_state == VehicleStatus.NAVIGATION_STATE_AUTO_LAND):
+            return
         if control.startswith('land:') or (self.baseline_collision is not None and control.startswith('idle:')):
             return
         data = rpc('simGetCollisionInfo', 'PX4', timeout=.3)
@@ -130,10 +133,31 @@ class Probe(Node):
         self.records.append(row)
 
 
+def fault_signal(case, operation):
+    """板端运行由 PC 管理器执行；容器只写入共享目录中的请求。"""
+    directory = Path('/run/airsim')
+    owner = json.loads((directory/'board-run.json').read_text())['owner']
+    token = str(time.time_ns())
+    path = directory/('fault-request-'+token+'.json')
+    reply = directory/('fault-reply-'+token+'.json')
+    temporary = path.with_suffix('.tmp')
+    temporary.write_text(json.dumps(dict(owner=owner, case=case, operation=operation)))
+    temporary.replace(path)
+    deadline = time.monotonic()+35
+    while time.monotonic()<deadline:
+        if reply.exists():
+            result = json.loads(reply.read_text())
+            if not result['ok']:
+                raise RuntimeError('故障注入失败：'+result['error'])
+            return
+        time.sleep(.05)
+    raise RuntimeError('PC 管理器未确认故障请求')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('action', choices=['inspect','fly','fault','dashboard'])
-    parser.add_argument('--case', choices=['lidar','planner','clock'])
+    parser.add_argument('--case', choices=['lidar','planner','clock','control'])
     parser.add_argument('--dashboard',choices=['auto','ansi','plain','off'],default='auto')
     parser.add_argument('--dashboard-width',type=int,default=shutil.get_terminal_size((88,24)).columns)
     parser.add_argument('--seconds',type=float,default=0,help='dashboard：0表示持续显示，Ctrl+C只退出观察')
@@ -141,6 +165,9 @@ def main():
     args = parser.parse_args()
     if args.action == 'fault' and not args.case:
         parser.error('fault 需要 --case')
+    board_mode = os.environ.get('AIRSIM_COMPUTE') == 'robopi'
+    if args.case == 'control' and not board_mode:
+        parser.error('control 退出测试仅由板端管理器执行')
     task = load_task('/run/airsim/task.json')
     if not math.isfinite(args.seconds) or args.seconds<0:parser.error('seconds 必须为有限非负数')
     mode=args.dashboard if args.dashboard!='auto' else ('ansi' if sys.stdout.isatty() and os.environ.get('TERM')!='dumb' else 'plain')
@@ -210,31 +237,37 @@ def main():
                             raise RuntimeError('任务启动未确认；'+status)
                         continue
                 if args.action == 'fault' and stopped_pid is None and control.startswith('track:'):
-                    needle = {'lidar':'/lesson/stage3/super/airsim/lidar_bridge.py',
-                              'clock':'/lesson/stage3/super/airsim/clock_bridge.py',
-                              'planner':'/super_ws/install/super_planner/lib/super_planner/fsm_node'}[args.case]
-                    candidates = []
-                    for proc in Path('/proc').iterdir():
-                        if not proc.name.isdigit():
-                            continue
-                        try:
-                            argv = (proc/'cmdline').read_bytes().split(b'\0')
-                            if needle.encode() in argv:
-                                candidates.append(int(proc.name))
-                        except OSError:
-                            pass
-                    if len(candidates) != 1:
-                        raise RuntimeError('无法唯一识别本容器的故障节点：' + str(candidates))
-                    stopped_pid = candidates[0]
-                    os.kill(stopped_pid, signal.SIGSTOP)
+                    if board_mode:
+                        fault_signal(args.case, 'terminate' if args.case == 'control' else 'pause')
+                        stopped_pid = 'remote'
+                    else:
+                        needle = {'lidar':'/lesson/stage3/super/airsim/lidar_bridge.py',
+                                  'clock':'/lesson/stage3/super/airsim/clock_bridge.py',
+                                  'planner':'/super_ws/install/super_planner/lib/super_planner/fsm_node'}[args.case]
+                        candidates = []
+                        for proc in Path('/proc').iterdir():
+                            if not proc.name.isdigit():
+                                continue
+                            try:
+                                argv = (proc/'cmdline').read_bytes().split(b'\0')
+                                if needle.encode() in argv:
+                                    candidates.append(int(proc.name))
+                            except OSError:
+                                pass
+                        if len(candidates) != 1:
+                            raise RuntimeError('无法唯一识别本容器的故障节点：' + str(candidates))
+                        stopped_pid = candidates[0]
+                        os.kill(stopped_pid, signal.SIGSTOP)
                     injected = wall
                 if injected is not None:
                     expected = {'lidar':'lidar cloud timeout', 'planner':'SUPER command timeout',
-                                'clock':'state or clock timeout'}[args.case]
+                                'clock':'state or clock timeout', 'control':'PX4 Offboard loss'}[args.case]
                     if control.startswith('land:') and expected in control:
                         fault_reason = control
                     vehicle = node.latest.get('vehicle')
-                    if fault_reason and vehicle and vehicle.arming_state != VehicleStatus.ARMING_STATE_ARMED:
+                    if args.case == 'control' and vehicle and vehicle.nav_state == VehicleStatus.NAVIGATION_STATE_AUTO_LAND:
+                        fault_reason = 'PX4 Offboard loss: AUTO_LAND observed'
+                    if fault_reason and vehicle and wall-node.received.get('vehicle',0)<1.5 and vehicle.arming_state != VehicleStatus.ARMING_STATE_ARMED:
                         success, reason = True, fault_reason + '; landed/disarmed'
                         break
                     if wall-injected > 45:
@@ -253,9 +286,14 @@ def main():
     finally:
         if stopped_pid is not None:
             try:
-                os.kill(stopped_pid, signal.SIGCONT)
-            except ProcessLookupError:
-                pass
+                if stopped_pid == 'remote':
+                    if args.case != 'control':
+                        fault_signal(args.case, 'resume')
+                else:
+                    os.kill(stopped_pid, signal.SIGCONT)
+            except (ProcessLookupError, RuntimeError) as exc:
+                success = False
+                reason += '; 故障节点恢复未确认：'+str(exc)
         if requested and not success:
             node.request.publish(String(data='land'))
             deadline = time.monotonic()+45
@@ -266,10 +304,12 @@ def main():
                 if vehicle and vehicle.arming_state != VehicleStatus.ARMING_STATE_ARMED:
                     break
         summary = dict(action=args.action, success=success, reason=reason, task=task['name'],
+                       experiment_policies={key:task[key] for key in
+                                            ('trajectory_limits_action','lidar_loss_action')},
                        fault_case=args.case, fault_reason=fault_reason,
                        wall_seconds=time.monotonic()-started, counts=dict(node.count), collision=node.collision,
                        contacts=node.contacts,
-                       status={k:node.latest.get(k,String()).data for k in ('control','task','sensors')},
+                       status={k:node.latest.get(k,String()).data for k in ('control','task','sensors','raw_sensors')},
                        cloud_points=node.latest['cloud'].width if 'cloud' in node.latest else 0,
                        map_points=node.latest['map'].width if 'map' in node.latest else 0,
                        inflated_points=node.latest['inflated'].width if 'inflated' in node.latest else 0)

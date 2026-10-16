@@ -1,5 +1,9 @@
 # Stage 3 开发交接
 
+换机继续 AirSim＋RoboPi 迁移验证，先读 [RoboPi 迁移交接](RoboPi-handoff.md)。
+
+当前标准主线为 AirSim 宿主机场景＋PX4 Docker＋ROS/SUPER Docker（PX4/GNSS，无 LIO）。Docker 2 的板端替代入口已开始实现：PC 仅保留一个 PX4/Agent/时钟/原始雷达容器，RoboPi 原生运行控制、配准、地图、规划与航点节点；构建部署与无显示测试见 [AirSim README](../../stage3/super/airsim/README.md#robopi-算力后端2026-10-16迁移验证中)。本轮已完成目标交叉构建、板端加载/消息序列化、单容器镜像与无显示 PC 短程/forest1/forest10 基线，板端 1 m/s 短程及 forest1 往返已通过，低速四项故障降落已通过；forest10 首轮因指令超时降落，三次成功冷启动待完成；实际结果见 [迁移验证](RoboPi-validation.md)。下文保留 Gazebo 路线的历史边界。
+
 SUPER 相关代码统一放在 `stage3/super/`：包含运行入口、控制与传感器适配、场景与可视化配置、`ros_src/` 和 `tests/`。生成的 `models/`、`worlds/` 同样位于该目录并忽略 Git；核心源码位于 `submodules/SUPER/` 的 `feat/sim` 分支，`thirdparty/` 只保存编译产物与旧参考副本。Stage 3 根目录保留 Jev 文本示例和阶段环境检查。
 
 操作只维护在 [Hands-on](Hands-on.md)，实测与失败边界维护在 [Validation](Validation.md)，上游来源与迁移边界见 [Bring-up](Bring-up.md)。
@@ -11,7 +15,7 @@ SUPER 相关代码统一放在 `stage3/super/`：包含运行入口、控制与�
 ## 当前交付
 
 - SUPER 的 ROS 2 Humble 核心、perfect_drone_sim 竞速入口，以及 PX4/Gazebo 实体走廊入口。
-- AirSim 替换后端位于 `stage3/super/airsim/`：已合入交接包感知、ROG 配置、航点/carrot 和 RViz，宿主机 AirSim＋Docker 1 PX4＋Docker 2 ROS/SUPER。PX4/GNSS 定位、采集时刻点云配准、同源仿真时钟和完整 XYZ 执行；AirSim 当前采用 GPS 200 ms 延迟补偿与姿态参考前馈 `MC_REF_FF=1`；完整 SUPER 1 m/s 短距离往返与降落已通过，测量时间对齐位置误差 P95 约 0.13 m、最大约 0.14 m；相同模式的 1 m/s 树林单程约 35 m 去回也已完成并解除解锁。操作、证据与未验证范围统一见 [AirSim README](../../stage3/super/airsim/README.md#super-双-docker-合并入口)。默认 AirSim 入口现为用户确认的 forest10（10 m/s）；10-ab 单目标修复与失败边界见文末。8/15 m/s 对照配置显式选择。
+- AirSim 替换后端位于 `stage3/super/airsim/`：已合入交接包感知、ROG 配置、航点/carrot 和 RViz，宿主机 AirSim＋Docker 1 PX4＋Docker 2 ROS/SUPER。PX4/GNSS 定位、采集时刻点云配准、同源仿真时钟和完整 XYZ 执行；AirSim 当前采用 GPS 200 ms 延迟补偿与姿态参考前馈 `MC_REF_FF=1`；完整 SUPER 1 m/s 短距离往返与降落已通过，测量时间对齐位置误差 P95 约 0.13 m、最大约 0.14 m；相同模式的 1 m/s 树林单程约 35 m 去回也已完成并解除解锁。操作、证据与未验证范围统一见 [AirSim README](../../stage3/super/airsim/README.md#super-双-docker-合并入口)。当前基线和默认 AirSim 入口为 forest10-ab（10 m/s）单目标；八航点仅保留显式历史对照，不能替代 AB 验收。单目标修复与失败边界见文末。
 - AirSimNH 控制速度档：独立 2 m 半径圆周的 1 m/s 两圈通过；2 m/s 实测峰值约 2.45 m/s，但跟踪误差超过 0.8 m 后中止并降落，3 m/s 未执行。早期未开姿态前馈的合并版本中，1 m/s 树林约 35 m 去回通过一次，最大跟踪误差 0.343 m，轨迹高度 1.424～3.500 m；雷达、规划器与时钟停流降落均通过。这些早期记录未调 PX4 增益/动力学，不把不同路线、不同控制配置的结果当作高速或多轮验收。
 - 默认走廊为 PX4/GNSS 定位、无附加墙面标记；雷达点云经 PX4 位姿变换后由 ROG-Map 积累为局部占据体素图，另有规划使用的膨胀体素图。点云 RViz 单独展示实时回波，地图 RViz 同时展示占据体素与安全膨胀区域；Gazebo 是第三个窗口。
 - Jev 文本示例保持原有状态；没有新增 Jev 飞行或付费 API 调用。

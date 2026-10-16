@@ -21,6 +21,8 @@ def ned(v):
 class Bridge(Node):
     def __init__(self):
         super().__init__('super_px4_bridge')
+        from airsim.profile_events import Recorder
+        self.profile = Recorder('control')
         self.declare_parameter('corridor', False)
         self.declare_parameter('speed', 2.0)
         task_path = self.declare_parameter('airsim_task_config', '').value
@@ -29,6 +31,9 @@ class Bridge(Node):
         if task_path:
             from airsim.task_config import load_task
             self.airsim_task = load_task(task_path)
+        self.lidar_loss_action = self.airsim_task['lidar_loss_action'] if self.airsim_task else 'land'
+        self.cloud_loss_at = None
+        self.limit_violations = ()
         self.use_lio=self.declare_parameter('use_lio',False).value
         self.height_required=self.declare_parameter('lidar_height_required',True).value
         self.corridor = self.get_parameter('corridor').value
@@ -82,7 +87,10 @@ class Bridge(Node):
 
     def cloud(self, msg):
         age = self.get_clock().now().nanoseconds/1e9-(msg.header.stamp.sec+msg.header.stamp.nanosec/1e9)
-        if msg.header.frame_id == 'world' and -.05 <= age <= .5 and msg.width:
+        accepted = bool(msg.header.frame_id == 'world' and -.05 <= age <= .5 and msg.width)
+        self.profile.emit('cloud_received', stamp=msg.header.stamp.sec*10**9+msg.header.stamp.nanosec,
+                          sim_age_s=age, accepted=accepted, previous_fresh_gap_s=time.monotonic()-self.cloud_at)
+        if accepted:
             self.cloud_at = time.monotonic()
 
     def status(self, msg):
@@ -192,6 +200,7 @@ class Bridge(Node):
         return not any(getattr(self.failsafe,key) for key in invalid)
 
     def land(self, reason):
+        self.profile.emit('land_requested', reason=reason, mode=self.mode)
         if self.airsim_task and self.mode == 'land':
             return
         self.mode,self.reason,self.sample,self.goal = 'land',reason,None,None
@@ -224,7 +233,9 @@ class Bridge(Node):
         if self.airsim_task:
             from airsim.task_config import inside
             bounds = inside(self.airsim_task, [p.x,p.y,p.z])
-        if not bounds or time.monotonic()-self.cloud_at>.5:
+            if self.airsim_task['trajectory_limits_action'] == 'observe':
+                bounds = True
+        if not bounds or (self.lidar_loss_action == 'land' and time.monotonic()-self.cloud_at>.5):
             self.reason='goal rejected: bounds or stale lidar'
             return
         msg.header.stamp=self.get_clock().now().to_msg()
@@ -236,23 +247,62 @@ class Bridge(Node):
         self.goal_pub.publish(msg)
 
     def accept(self,msg):
+        self.profile.emit('command_received', stamp=msg.header.stamp.sec*10**9+msg.header.stamp.nanosec,
+                          mode=self.mode)
         if self.mode not in ('planning','track') or msg.header.frame_id!='world':
             return
         p,v,a=[[float(getattr(vector,k)) for k in ('x','y','z')] for vector in (msg.position,msg.velocity,msg.acceleration)]
         age=self.get_clock().now().nanoseconds/1e9-(msg.header.stamp.sec+msg.header.stamp.nanosec/1e9)
-        valid=all(math.isfinite(x) for x in p+v+a) and -.05<=age<=.3
+        # Data validity is independent of experiment envelope diagnostics.
+        if not all(math.isfinite(x) for x in p+v+a):
+            self.land('SUPER invalid command: non-finite p/v/a'); return
+        if not -.05<=age<=.3:
+            self.land(f'SUPER invalid command: stamp age={age:.4f}s'); return
+        if self.p is None:
+            self.land('SUPER invalid command: local position unavailable'); return
         # Preserve the full SUPER trajectory, including vertical feedforward.
         bounds = (abs(p[0])<=2.5 and -1<=p[1]<=101 and .2<=p[2]<=12.0) if self.corridor else (abs(p[0])<=10 and abs(p[1])<=10 and .2<=p[2]<=5)
         if self.airsim_task:
             from airsim.task_config import inside
             bounds = inside(self.airsim_task, p)
-        valid=valid and bounds
-        valid=valid and math.dist(v,[0,0,0])<=self.speed_limit and math.dist(a,[0,0,0])<=(self.airsim_task['max_acc_m_s2']+.5 if self.airsim_task else 6.)
-        valid=valid and self.p is not None and math.dist(p,self.p)<=3.
-        if not valid:
-            self.land(f'SUPER command rejected: p={p}, v={v}, a={a}, age={age:.4f}, error={math.dist(p,self.p) if self.p else -1:.3f}'); return
+        violations = tuple(name for name, passed in (
+            ('task_bounds', bounds),
+            ('reference_speed', math.dist(v,[0,0,0]) <= self.speed_limit),
+            ('reference_acceleration', math.dist(a,[0,0,0]) <= (self.airsim_task['max_acc_m_s2']+.5 if self.airsim_task else 6.)),
+            ('tracking_error', math.dist(p,self.p) <= 3.)) if not passed)
+        action = self.airsim_task['trajectory_limits_action'] if self.airsim_task else 'land'
+        if violations != self.limit_violations:
+            details = dict(violations=list(violations), action=action, p=p, v=v, a=a,
+                           age_s=age, tracking_error_m=math.dist(p,self.p))
+            self.profile.emit('trajectory_limits_changed', **details)
+            self.get_logger().warning(f'trajectory limits: {details}')
+            self.limit_violations = violations
+        if violations and action == 'land':
+            self.land(f'SUPER command rejected: limits={violations}, p={p}, v={v}, a={a}, age={age:.4f}, error={math.dist(p,self.p):.3f}'); return
         self.sample,self.sample_at=(p,v,a),time.monotonic()
+        self.profile.emit('command_accepted', stamp=msg.header.stamp.sec*10**9+msg.header.stamp.nanosec)
         self.mode,self.reason='track','tracking SUPER'
+
+    def lidar_watchdog(self, wall, active):
+        if not active:
+            return
+        age = wall-self.cloud_at
+        if age > .5:
+            if self.cloud_loss_at is None:
+                self.cloud_loss_at = self.cloud_at
+                self.profile.emit('cloud_loss_started', age_wall_s=age, mode=self.mode,
+                                  action=self.lidar_loss_action)
+                self.get_logger().warning(f'lidar stale: age={age:.3f}s action={self.lidar_loss_action}')
+            if self.lidar_loss_action == 'land':
+                self.land('lidar cloud timeout')
+                return True
+        elif self.cloud_loss_at is not None:
+            gap = self.cloud_at-self.cloud_loss_at
+            self.profile.emit('cloud_loss_ended', gap_wall_s=gap, mode=self.mode,
+                              action=self.lidar_loss_action)
+            self.get_logger().info(f'lidar recovered: gap={gap:.3f}s action={self.lidar_loss_action}')
+            self.cloud_loss_at = None
+        return False
 
     def tick(self):
         wall=time.monotonic(); now=self.get_clock().now().nanoseconds/1e9
@@ -294,10 +344,8 @@ class Bridge(Node):
             self.land('planning timeout');active=False
         if self.mode=='track' and wall-self.sample_at>.5:
             self.land('SUPER command timeout');active=False
-        if self.mode=='track' and wall-self.cloud_at>.5:
-            self.land('lidar cloud timeout');active=False
-        if active and self.airsim_task and wall-self.cloud_at>.5:
-            self.land('lidar cloud timeout');active=False
+        if self.lidar_watchdog(wall, active and (self.mode=='track' or bool(self.airsim_task))):
+            active=False
         if self.mode=='track' and self.goal and self.p:
             if math.dist(self.p,self.goal)<.3 and math.dist(self.v,[0.,0.,0.])<.3:
                 self.goal_stable=self.goal_stable or wall
@@ -313,6 +361,7 @@ class Bridge(Node):
             sp.position,sp.velocity,sp.acceleration=ned([p[i]+self.origin[i] for i in range(3)]),ned(v),ned(a)
             sp.yaw,sp.yawspeed=float(self.yaw),0.
             self.sp_pub.publish(sp)
+            self.profile.emit('setpoint_published', stamp=sp.timestamp*1000, mode=self.mode)
             reference=PositionCommand();reference.header.stamp=self.get_clock().now().to_msg();reference.header.frame_id='world'
             for vector,values in ((reference.position,p),(reference.velocity,v),(reference.acceleration,a)):
                 vector.x,vector.y,vector.z=values

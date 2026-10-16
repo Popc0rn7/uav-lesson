@@ -15,9 +15,10 @@
 
 | 文件 | 消费者与职责 |
 | --- | --- |
+| `runtime.forest5-ab-observe.json` | 显式 RoboPi 仿真实验：AB 单目标、5 m/s、200 ms 前视，点云失流仅记录；需用户任务涵盖该实验，不默认扩展到实机或其他任务 |
 | `runtime.example.json` | 显式选择的独立 PX4 控制测试配置。指定场景目录、二进制、启动参数、settings 文件、PX4 镜像、容器及任务 |
 | `settings.json` | AirSim 原生设置的输入文件，指定 ViewMode、车辆和传感器等；由 runtime 配置的 settings 字段选用 |
-| `runtime.super.json` / `runtime.forest1.json` / `runtime.forest8.json` / `runtime.forest10.json` / `runtime.forest10-ab.json` / `runtime.forest15.json` | SUPER 双 Docker；super_task 选择任务文件，出生点/雷达/相机覆盖输入 settings，路径相对 runtime 文件 |
+| `runtime.super.json` / `runtime.forest1.json` / `runtime.forest5.json` / `runtime.forest8.json` / `runtime.forest10.json` / `runtime.forest10-ab.json` / `runtime.forest15.json` | SUPER 双 Docker；super_task 选择任务文件，出生点/雷达/相机覆盖输入 settings，路径相对 runtime 文件 |
 | `task.*.json` | 出生点相对 ENU XYZ 路线、速度/加速度、stop/pass 航点策略、虚拟地图边界、超时与结束行为；运行读取启动快照 |
 
 `up` 会从这两份输入生成 `artifacts/airsim-runtime/<运行ID>/settings.json`，并把该文件作为唯一 `-settings=` 传给场景。不要修改生成文件、运行状态或历史报告来改变配置。task 使用 up 时保存的任务配置，不会即时重新读取后来修改的 JSON。
@@ -62,8 +63,10 @@
 - 启动失败只清理本次创建的资源，保留日志。down 默认拒绝停止未解除解锁的实例；碰撞、失控或 Land 卡住时，用户请求恢复即授权对已核实实例使用 stop/down --force，不要求先正常降落或重复确认。stop 是仿真急停，不记作降落验收；正常重启仍先落地解除解锁。status/land/stop 必须在任务占锁时可用，急停不接管启动中的 up 或未知资源。
 - 先验证启动和静止链路；按授权做任务时记录起飞、往返、悬停误差、降落与解除解锁。没有运行条件就报告未验证，不能以 JSON/语法检查替代实际验收。
 - 当前已接受初始化 Unsupported main mode 为该 SITL 组合的已知非阻塞警告，不额外设置 SYS_HITL 或手动开启 HIL，不以消除该警告作为换场景的目标。其他新错误仍单独诊断。
-- SUPER 合并已由用户授权：三职责分离，定位用 PX4/GNSS，完整 XYZ 位置/速度/加速度执行；航点/carrot 只发任务目标。雷达按采集时刻的 PX4 位姿/外参配准，禁止真值反馈。统一仿真时间，通信看门狗用单调墙钟。任务/出生点/速度从输入配置读取，默认入口采用用户已确认的 forest10（10 m/s）；A→B 单目标对照显式选择 runtime.forest10-ab.json。保留现有 Gazebo 流程。
+- SUPER 合并已由用户授权：三职责分离，定位用 PX4/GNSS，完整 XYZ 位置/速度/加速度执行；航点/carrot 只发任务目标。雷达按采集时刻的 PX4 位姿/外参配准，禁止真值反馈。统一仿真时间，通信看门狗用单调墙钟。任务/出生点/速度从输入配置读取，默认入口和当前开发基线采用 runtime.forest10-ab.json（A→B 单目标）；八航点仅保留为显式历史对照，不用其通过代替 AB 验收。保留现有 Gazebo 流程。
 - AirSim 当前按用户确认采用 GPS `UpdateLatency=0.2` 秒、`SENS_GPS0_DELAY=200` 毫秒及姿态参考前馈 `MC_REF_FF=1`，统一由本目录 settings.json 加载；不要迁入 Gazebo 或把定位补偿解释成删除传感器延迟。开启前馈不等于理想状态反馈；真值仍不得进入 PX4/SUPER 控制。新参数需 down/up，飞行前及复盘以实际 PX4 参数/ULog 确认，验收范围见 README。
 - 每轮飞行结束（含失败）必须查看自动 `.review.*` 与对应 ULog，按 README 的复盘顺序报告参考/时序、估计、位置/速度/姿态/角速度跟踪和执行余量。区分证据与假设，排除撞后数据；未确认解除解锁不得写作已安全降落。固定路线/策略/资源，每轮只改一个因素，不凭成败直接调 PID。
 
 日志、生成设置、状态与任务报告留在忽略 Git 的 artifacts 目录，不提交场景包、二进制、ULog、运行日志或凭据。更新 README 中的场景适用范围和证据；涉及 Stage 3 流程边界时同步 docs/stage3 的入口链接，不重复维护操作说明。
+
+- AB 仿真实验采用 trajectory_limits_action=observe、lidar_loss_action=observe；包络、参考速度／加速度和跟踪偏差超限只记录。不得新增隐藏的实验中止条件；所有保留条件见 README 的“AB 仿真实验的中止条件”，新增中止行为须用户授权并更新该表。数据有效性与控制失联处理不能和实验诊断门限混为一谈。

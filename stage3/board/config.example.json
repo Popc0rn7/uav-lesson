@@ -1,0 +1,9 @@
+{
+  "sdk": "/absolute/path/to/verified/sdk/native",
+  "deps": "/absolute/path/to/verified/target-snapshot",
+  "python_deps": "/absolute/path/to/verified/python-target-headers",
+  "host_python": "/absolute/path/to/build-venv/bin/python",
+  "target_metadata": "/absolute/path/to/current/python-target.json",
+  "px4_source": "/absolute/path/to/pinned/px4_msgs",
+  "target_verified": false
+}

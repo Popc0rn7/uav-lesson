@@ -7,6 +7,12 @@ from pathlib import Path
 def load_task(path):
     task = json.loads(Path(path).read_text())
     task.setdefault('goal_mode', 'carrot')
+    task.setdefault('lidar_loss_action', 'land')
+    task.setdefault('trajectory_limits_action', 'land')
+    if task['trajectory_limits_action'] not in ('land', 'observe'):
+        raise ValueError('trajectory_limits_action 必须为 land 或 observe')
+    if task['lidar_loss_action'] not in ('land', 'observe'):
+        raise ValueError('lidar_loss_action 必须为 land 或 observe')
     if task['goal_mode'] not in ('carrot', 'direct'):
         raise ValueError('goal_mode 必须为 carrot 或 direct')
     def vector(value, size):

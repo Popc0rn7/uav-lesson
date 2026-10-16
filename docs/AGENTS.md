@@ -5,12 +5,12 @@
 ## 文件位置
 
 - stage1/chat.py：PC 聊天入口。
-- stage1/deploy.py：PC 固定部署入口，无命令行参数；必须显式填写本次设备 TARGET，留空会拒绝连接。
+- stage1/deploy.py：PC 部署入口；实际部署必须显式传 `--target`，`--check-local` 仅检查本地文件。
 - stage1/download_model.py：PC 课前下载模型。
 - robopi/stage1/：板端待传文件，内容对应 /data/local/workspace/stage1/。
 - robopi/stage1/qwen_infer/：上游运行工具，忽略 Git；不在本仓库维护其源码。
 - artifacts/models/：本机模型与 embedding 缓存，可以使用软链接。
-- src/：仅供跨阶段通用代码使用，目前没有需要建立的内容。
+- src/：维护 Stage 1/3 共用的 HDC 远端退出码检查与 Fast DDS 接口配置。
 
 ## 1. PC：获取上游运行产物
 
@@ -53,7 +53,8 @@ python3 stage1/download_model.py --revision '<固定版本>'
 HDC 不默认经以太网接入。板端根目录由 deploy.py 顶部常量确定：
 
 ```sh
-python3 stage1/deploy.py
+python3 stage1/deploy.py --check-local
+python3 stage1/deploy.py --target '<本次确认的connect-key>'
 ```
 
 程序及板端脚本传到 /data/local/workspace/stage1/；模型传到
@@ -80,4 +81,4 @@ PC 使用 stage1/chat.py 或自行 ROS publish，具体命令、回复字段与�
 既有兼容证据：Humble、rmw_fastrtps_cpp、OpenHarmony AArch64、Linux 6.6.86、Python 3.12 ABI，
 驱动 xh2a_drv v1.4.0、TCIM v2.5.0；PC Humble Docker 使用 host 网络。
 2026-10-08 旧布局真实跨机常驻推理返回 2/北京，0.662/0.779 秒，同一 worker，模型图各加载一次。
-新布局的 HTTP 文本与 VQA 已单独实测；文件重组后的完整 ROS 跨机聊天链路仍待重新验收，不能把 HTTP 验证当作 ROS 验收。VQA 的 PC 请求方式和兼容范围见 Stage 1 Hands-on。
+2026-10-16 新布局完整部署与真实以太网 ROS 聊天、桥重启常驻复用、并发拒绝及单图 VQA 已通过，证据见 Stage 1 Hands-on；HTTP 与 ROS 分别验收。VQA 的 PC 请求方式和兼容范围见 Stage 1 Hands-on。

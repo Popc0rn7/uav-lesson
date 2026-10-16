@@ -84,3 +84,13 @@ Advance only when the current gate passes:
 3. Runtime: `get_devices` reports the accelerator and vendor smoke tests pass.
 4. Model: sample inference produces correct output without kernel errors.
 5. Integration: a locally cross-compiled minimal C++ program links, deploys, and repeats the same result.
+
+## 后续故障证据（2026-10-16）
+
+同为内核 6.6.86、驱动 v1.4.0 且模块 SHA 匹配的一次启动，模块成功加载，但 PCIe 未绑定；内核报 `dma_alloc_coherent failed for wr channel 7`、`hdma_init failed -12`，CMA 请求 512 pages 失败。`get_devices --num xh2` 返回 0，模型启动器拒绝加载图。该镜像 CmaTotal 为 8 MiB；MemAvailable 仍约 6.6 GiB，不能据总空闲内存推断连续 DMA 分配一定可用。当前内核没有 `/proc/sys/vm/compact_memory`，不得假定 compaction 接口存在。
+
+此时先核对是否真实绑定、实际工具帮助和 bounded kernel log，不把“模块在 lsmod 中”记作 runtime ready，不反复加载大模型。重启或更改内核/CMA/启动配置分别需要当前任务对具体动作的授权；重启后早期加载是否解决须重新实测。本次仍待复验，不能写成恢复方案已通过。
+
+当前 get_devices 帮助要求后端参数，可用 `--num xh2`；直接无参数返回 usage。运行独立厂商诊断时清理本进程的导航 `LD_PRELOAD`，再设置其实际 HAL/TCIM 库路径，避免把无关导航库解析失败误判为 NPU 故障。
+
+2026-10-16 后续复验：经用户明确授权重启后，在 uptime 147 秒先加载同一个已核验模块，PCI 成功绑定 `houmo,xh2a`，`get_devices --num xh2` 返回 1。随后 Qwen ready、两次 ROS 文本及单图 VQA 通过。内核仍有部分 CMA 分配警告，故不能仅凭警告行判断 probe 失败；结合 PCI 绑定、runtime 枚举和真实推理判断。未修改内核、CMA 启动参数或系统库。

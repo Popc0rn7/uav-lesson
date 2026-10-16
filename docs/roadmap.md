@@ -101,3 +101,5 @@ Stage 3 当前收束点：MID-360 视场与时间分片扫描近似、FAST-LIO2 
 - [ ] 搜索/绕障技能、复杂场景下重规划效果与多轮稳定性验证。
 
 架构、代码入口与[当前关键问题](stage5/Agent.md#9-当前仍存在的关键问题)见 [Agent介绍](stage5/Agent.md)；操作见 [Stage 5 Hands-on](stage5/Hands-on.md)，实测证据见 [Validation](stage5/Validation.md)。
+
+2026-10-16 板端迁移进展：Stage 1 新布局完整部署和真实 ROS 常驻文本、桥重启、并发拒绝、单图 VQA 通过；Stage 3 AirSim/SUPER（GNSS、无 LIO）已通过单容器镜像、以太网 DDS 和无显示 Docker 短程/forest1/forest10 基线，板端构建/加载/序列化、短程与 forest1 原生规划控制往返已通过，低速四项故障降落通过；forest10 首轮失败，三次成功冷启动待完成。完整迁移不标记完成，实际证据见 [RoboPi 迁移验证](stage3/RoboPi-validation.md)，操作见 AirSim README。

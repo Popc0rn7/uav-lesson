@@ -34,7 +34,7 @@ uv run stage3/super/airsim/runtime.py stop
 | Docker 1 `uav-airsim-px4` | 原 PX4 镜像，无 Gazebo；HIL→PX4/GNSS，DDS 收完整 XYZ 位置/速度/加速度 |
 | Docker 2 `uav-airsim-ros` | XRCE Agent、时钟桥、PX4 控制适配器、雷达桥、SUPER/ROG、航点任务，RViz 可选 |
 
-当前 AirSim 默认采用 **GPS 延迟补偿 200 ms＋姿态参考前馈 `MC_REF_FF=1`**，由 `settings.json` 的 `Vehicles.PX4.Parameters` 加载，常规和高速 settings 均保留这两个参数。仅改变 AirSim 后端，不修改 Gazebo。默认入口选择用户已确认的 10 m/s 八航点；单目标 10-ab 显式选择，当前仍未完成长任务验收。故障保护保持原值。修改配置后需要正常 down/up，新参数不会热加载到旧实例。
+当前 AirSim 默认采用 **GPS 延迟补偿 200 ms＋姿态参考前馈 `MC_REF_FF=1`**，由 `settings.json` 的 `Vehicles.PX4.Parameters` 加载，常规和高速 settings 均保留这两个参数。仅改变 AirSim 后端，不修改 Gazebo。当前基线及默认入口为 A→B 单目标 10-ab，八航点仅保留为显式历史对照，不能替代 AB 验收。故障保护保持原值。修改配置后需要正常 down/up，新参数不会热加载到旧实例。
 
 ### 课前准备（PC）
 
@@ -51,7 +51,7 @@ python3 stage3/super/super_docker.py build
 
 ```bash
 # 如有旧实例，先 status 确认落地未解锁，再 down；不要停止未知实例。
-# 默认 forest10 八航点；短程回归需显式加 --config stage3/super/airsim/runtime.super.json。
+# 默认 forest10-ab 单目标；短程回归需显式加 --config stage3/super/airsim/runtime.super.json。
 uv run --extra flight-review stage3/super/airsim/runtime.py up
 uv run stage3/super/airsim/runtime.py inspect
 uv run stage3/super/airsim/runtime.py view
@@ -67,8 +67,9 @@ uv run stage3/super/airsim/runtime.py down
 | --- | --- |
 | `runtime.super.json` → `task.low.json` | 显式低速回归：出生 NED `(0,0,0)`，1 m/s、2 m/s²；ENU `(0,2,2)`→`(0,0,2)`，中间航点稳定后返程，最后降落 |
 | `runtime.forest1.json` → `task.forest1.json` | 树林短程：出生 NED `(42.60,160.11,0)`，ENU `(-9.35,33.53,2)`→`(0,0,2)`，1 m/s；已完成一次实际去回 |
+| `runtime.forest5.json` → `task.forest5.json` | 与 forest10 相同的树林八航点，仅配置速度改为 5 m/s；板端重规划放宽实验结果见迁移验证，不沿用 10 m/s 的验收结论 |
 | `runtime.forest8.json` → `task.forest8.json` | 交接 demo4 八航点树林路线，8 m/s、8 m/s²，连续推进，**待验证，非默认** |
-| `runtime.forest10.json` → `task.forest10.json` | 默认 10 m/s 八航点树林任务；两轮成功证据见文末速度对照，修复后八航点未在本轮重飞 |
+| `runtime.forest10.json` → `task.forest10.json` | 显式历史对照：10 m/s 八航点；两轮成功证据不能当作 AB 基线通过 |
 | `runtime.forest10-ab.json` → `task.forest10-ab.json` | 10 m/s、约 235 m 单远端目标，无任务层 carrot；已开始飞行但碰撞中止，未到 B |
 | `runtime.forest15.json` → `task.forest15.json` | 显式 15 m/s 需求对照，历史实际峰值仍约 10 m/s，不代表达到 15 m/s |
 | `planner.base.yaml` | 交接航点版 SUPER 参数；启动时从任务覆盖速度/加速度、虚拟地面/天花板与 odom 超时，生成本次 `planner.yaml` |
@@ -719,9 +720,9 @@ uv run --extra flight-review stage3/super/airsim/runtime.py task
 
 ### 默认 10 m/s 与 A→B 单目标长任务（2026-10-15）
 
-按用户确认，`runtime.py up` 不带 `--config` 时默认选择 `runtime.forest10.json`：10 m/s 八航点树林任务。独立 PX4 控制测试仍可显式选择 `runtime.example.json`；短程 SUPER 使用 `runtime.super.json`。已有运行使用启动快照，默认值变更不影响当前实例。
+2026-10-16 用户明确当前基线为 AB：`runtime.py up` 不带 `--config` 时默认选择 `runtime.forest10-ab.json`。此前的 forest10 八航点仅保留为显式历史对照，不再作为默认或迁移验收基线。独立 PX4 控制测试仍可显式选择 `runtime.example.json`；短程 SUPER 使用 `runtime.super.json`。已有运行使用启动快照，默认值变更不影响当前实例。
 
-单目标对照配置为 `runtime.forest10-ab.json` / `task.forest10-ab.json`：保持 forest10 的出生点、终点、10 m/s、8 m/s²、传感器、地图、控制和保护，只保留最终 B 点 `[-37.57, 231.76, 6]`（出生点相对 ENU 米）。起飞点 A 约为 `[0, 0, 2]`，直线距离约 235 m；任务层 `goal_mode=direct` 向 SUPER 发一次最终 B 点，不发送中间 carrot 目标。SUPER 内部仍使用原 20 m 局部规划范围和滚动重规划；不保证全局绕开任意障碍或局部死路。单航段超时 300 仿真秒，总任务超时仍为 600 仿真秒。
+单目标基线配置为 `runtime.forest10-ab.json` / `task.forest10-ab.json`：保持 forest10 的出生点、终点、10 m/s、8 m/s²、传感器、地图、控制和保护，只保留最终 B 点 `[-37.57, 231.76, 6]`（出生点相对 ENU 米）。起飞点 A 约为 `[0, 0, 2]`，直线距离约 235 m；任务层 `goal_mode=direct` 向 SUPER 发一次最终 B 点，不发送中间 carrot 目标。SUPER 内部仍使用原 20 m 局部规划范围和滚动重规划；不保证全局绕开任意障碍或局部死路。单航段超时 300 仿真秒，总任务超时仍为 600 仿真秒。
 
 **PC 图形桌面终端，仓库根目录**，前提为上一实例已落地解除武装并正常 down：
 
@@ -753,3 +754,186 @@ uv run stage3/super/airsim/runtime.py down
 旧 SimpleFlight 交接运行脚本已归档到忽略 Git 的本地参考目录，当前课程入口只维护本目录。移除 SUPER runtime 中不会执行的独立 RPC 任务块、无人消费的任务误差门限与未使用导入，保留真实报告误差指标、独立 PX4 控制回归和显式诊断工具。直接目标模式只计算并发送最终目标；失败任务已流式显示的输出不在异常末尾重复打印。配置和控制参数未调整。
 
 [SUPER 远目标裁剪报告](../../../docs/stage3/SUPER-astar-clipped-goal-report.md)包含上游代码来源、无仿真复现、最小修复与验证范围。整理后完整 Python 回归 60 项通过；A* CTest 五种搜索场景及静止保持 C++ 测试通过。未为代码整理新增飞行，不将上述 10-ab 的碰撞记录改为成功。
+
+## RoboPi 算力后端（2026-10-16，迁移验证中）
+
+标准迁移路线为宿主机 AirSim＋单个 PC Docker（PX4、MicroXRCE Agent、HIL `/clock`、原始雷达 RPC 桥）＋OpenHarmony RoboPi 原生 ROS/SUPER。板端运行控制桥、雷达过滤/GNSS 采样位姿配准、ROG-Map、SUPER 和航点任务；不运行 AirSim、Gazebo、Agent 或 LIO。Docker 原后端仍为默认，任务输入、GNSS 延迟补偿、控制参数和完成规则保持现有约定。
+
+### 教师准备（PC 仓库根目录）
+
+前置条件：本次明确的 HDC 设备、以太网 DDS 可达；匹配当前镜像的 OHOS SDK、ROS/第三方目标开发快照、Python 3.12/NumPy 目标头文件、主机生成工具，以及与 `develop/docker/Dockerfile` 相同固定提交且干净的 px4_msgs 源码。模型推理与飞行性能测试分时进行。不要将相邻 GCOPTER 的旧快照直接标作当前设备已验证。
+
+```bash
+# 只读核实设备/基础 ROS；替换本次实际 connect key。
+python3 stage3/robopi.py preflight --target '<connect-key>'
+# 从当前设备导出目标开发快照；SDK 和主机 venv 须先按 skill 核验。
+python3 stage3/board/prepare.py --target '<connect-key>' \
+  --sdk '<OHOS SDK native目录>' --host-python '<主机生成工具venv>/bin/python'
+python3 stage3/robopi.py build --config artifacts/robopi-stage3/board-config.local.json --jobs 2
+python3 stage3/robopi.py deploy --target '<connect-key>'
+# 使用与基线相同的 PX4 镜像；构建新的单容器 PC 镜像。
+python3 stage3/robopi.py pc-image --px4-image '<已核实的PX4镜像摘要>'
+```
+
+`build` 输出到忽略 Git 的 `artifacts/robopi-stage3/`，顺序构建 PX4 消息、SUPER 消息、ROG-Map 与规划器；检查目标 ELF、SOABI、RPATH 并保留源码/SDK证据。目标 PCL、yaml-cpp 等依赖须实际可用，入口不自动下载/安装或用 Linux 库补齐。构建入口检查并幂等应用 `stage3/board/patches/` 中的补丁，上下文不符即停止且不覆盖本地修改。OHOS 默认关闭依赖 libdw 的崩溃栈处理，Linux 默认保持开启；算法参数不变。目标 libyaml 有库和头文件但缺 CMake 配置时，使用本目录构建适配解析已核验目标文件。当前镜像的通用 PNG 链接指向 1.6.43，而头文件与 PCL 需要带 PNG16_0 符号版本的 1.6.50；构建选择同一目标快照内与头文件匹配的库，作为 release 私有依赖打包，不改板端系统链接。SDK/ABI/依赖变化时保留旧构建与证据，使用新构建目录；源码变化可由 Ninja 增量重建。单容器镜像用原 PX4 的 glibc loader 和完整依赖闭包运行 PX4，ROS 仍使用 Humble/Jammy 运行库。
+
+`deploy` 从 `robopi/stage3/` 收集脚本、共享源码链接的实际内容及构建 install，生成内容寻址 release；不传源码链接、SDK 或缓存。远端为 `/data/local/workspace/stage3/releases/<摘要>/`，重复部署校验后复用，不覆盖旧 release。每次运行独立保存 task/planner 快照和进程身份；停止检查 PID、启动时刻、命令行、exe 与工作目录。缺文件、ABI不符或 HDC失败即停止，不接管其他项目。
+
+### 无显示运行与验收（PC 仓库根目录）
+
+先填写 runtime 中本机真实 scene_dir/binary；其他机器的 `/mnt/disk1/wqy/...` 不是通用路径。下面从短程配置开始。保持任务、settings 与场景路径的解析规则；复制 runtime 到 artifacts 时需将 settings/super_task 改为绝对路径。
+
+```bash
+# 可以先预览，不访问 Docker/设备，也不启动 Xvfb。
+uv run stage3/super/airsim/runtime.py up \
+  --config '<本机短程runtime.json>' --compute robopi --target '<connect-key>' \
+  --pc-address '<PC以太网IPv4>' --board-address '<板端以太网IPv4>' \
+  --image uav-airsim-robopi-pc:local --no-display --dry-run
+# 通过预检后启动；up 只待命，不起飞。
+uv run stage3/super/airsim/runtime.py up \
+  --config '<本机短程runtime.json>' --compute robopi --target '<connect-key>' \
+  --pc-address '<PC以太网IPv4>' --board-address '<板端以太网IPv4>' \
+  --image uav-airsim-robopi-pc:local --no-display
+uv run stage3/super/airsim/runtime.py status
+uv run stage3/super/airsim/runtime.py inspect
+uv run --extra flight-review stage3/super/airsim/runtime.py task --dashboard plain
+# 确认 Disarmed 后清理，再切换配置重新 up。
+uv run stage3/super/airsim/runtime.py down
+```
+
+`--no-display` 使用本次管理器拥有的独立 Xvfb、640×480 、`-RenderOffScreen` 和 `ViewMode=NoDisplay`，不显示 AirSim 主窗口，不启动 RViz，仍保留 Vulkan/物理/雷达。需要 PC 已安装 Xvfb；不是关闭渲染器，不保证 GPU 或物理负载消失。状态记录包含虚拟显示身份，清理只停止本次显示。不要用 `-nullrhi` 绕过传感器与场景验证。
+
+后续命令从启动快照取得设备、release、配置与后端，不能再次传 `--target/--compute` 更换现场。`dashboard` 继续在 PC 仿真容器内观察；板端模式不支持通过 `view` 启动额外 RViz。板端点云线格式为传感器局部 FRD、原始采样纳秒时间戳、XYZ FLOAT32；话题 `/stage3/uav1/lidar_raw`。板端只用 PX4/GNSS 里程计插值配准，不消费 AirSim 真值。域 10、Fast DDS UDP、仿真时间和墙钟看门狗沿用既有契约。
+
+短程和 forest1 仅用于定位问题；正式迁移验收以 forest10-ab 单目标为基线，每次换配置先 down/up。同样的 NoDisplay 条件下对照 Docker 与板端 AB 冷启动；八航点只做显式对照，其通过不能代替 AB。记录实际速度、参考速度、跟踪误差、原始点云吞吐与频率、CPU/内存和仿真/墙钟比（板端每 2 秒采样到本次 run 的 resources.jsonl，down 时取回 board-logs；报告 raw_sensors 记录原始点云频率/吞吐），不能静默降低点数、速度或放宽超时。单目标 forest10-ab 仍单独保留其既有失败边界。
+
+故障测试在独立冷启动的低速配置中逐项执行，前置条件为静止链路就绪、Disarmed：
+
+```bash
+uv run --extra flight-review stage3/super/airsim/runtime.py fault --case lidar --dashboard plain
+# 各轮落地并 down/up 后分别选择 planner、clock、control。
+```
+
+雷达/规划器在板端暂停，clock 在 PC 暂停；暂停覆盖降落过程后恢复。control 测试终止板端控制桥，监督器停止其余本项目节点，检查 PX4 Offboard 丢失后 AUTO_LAND 及解除武装；该轮之后必须 down/up。所有注入都由 PC 管理器核验本次实例后执行，PC 检查容器不需要 HDC 二进制。成败均复盘 `.review.*`/ULog，控制桥退出后的降落以 PX4 状态判断，不能用陈旧控制状态宣称正常落地。
+
+`land/status/stop` 保持可在任务占锁时使用。HDC取消失败仍尝试 PC PX4降落，但报告板端取消未确认；不能保证板端已经停止。stop 会继续回收可核验的 PC 资源；若板端状态未知，状态保持 stopping，恢复 HDC 后重试 stop。急停不计作降落验收。
+
+### 本轮实际证据与限制
+
+已完成单容器 PC 镜像构建、以太网真实 DDS 往返，以及 NoDisplay 条件下 Docker 基线的短程、forest1、forest10 八航点飞行；均无碰撞并确认解除武装。板端交叉构建、加载/消息序列化、1 m/s 短程与 forest1 往返也已通过；低速四项故障降落已通过；forest10 首轮因指令超时降落，三次成功冷启动待完成，不能将 PC 结果计为其上板验收。实际运行、版本和复盘证据见 [RoboPi 迁移验证](../../../docs/stage3/RoboPi-validation.md)。
+
+### 板端以太网通信
+
+本仓库 PC↔RoboPi 的跨机 ROS 通信默认沿用本节的独立以太网 DDS 范式，跨阶段复用 `src/uav_dds.py` 生成配置；网卡、地址和所需源策略规则按实际环境核实，本次临时测试地址不是课程固定地址。HDC 用于管理；`fport` 仅转发 HTTP/TCP，不能代替 DDS。`up --compute robopi` 必须明确两个接口地址，先只读核对两端 IPv4 及网卡 carrier，再生成本次 PC/板端 Fast DDS 接口白名单与单播 peer 配置（同时包含本机与远端；PC 还允许 127.0.0.1 UDP 回环及其单播 peer，支持同一容器内 Agent、桥及检查器通信）。Stage 1 的 `verify.py --dds-profile <PC配置.xml>` 可复用同一配置；板端 serve.sh 启动前设置对应 `FASTRTPS_DEFAULT_PROFILES_FILE`。
+
+本次镜像存在优先于 main 表的 fwmark 策略路由：即使源 IP 为以太网，默认 socket 仍可能走 Wi-Fi。先核对实际网卡和源路由，不能把“ARP 已通”当作 DDS 已通。需要时在 **RoboPi shell** 用已部署的 `robopi/tools/ethernet_rule.py add --source <板端测试IPv4>` 添加仅匹配测试源 /32 的 main 表规则；默认优先级 10000，冲突即拒绝。`status` 查看，`remove` 仅撤销本工具保存所有权的规则。本工具不设置 IP、默认路由或防火墙。网卡地址和规则均为临时配置，重启后恢复再复验；PC 可使用不自启、不落盘的 NetworkManager 测试连接，勿覆盖原网络。成功判据必须包含普通 socket 的双向 UDP/实际 ROS 消息收发。
+
+### OpenHarmony 时钟话题诊断
+
+本次镜像的 rmw_fastrtps 在同一 C++ 节点同时订阅和发布 `/clock` 时会断言。最小探针 `stage3/board/probes/ros_topics.cpp` 的 String、PointCloud2、MarkerArray、Odometry 创建均成功，`use_sim_time=false` 加 Clock 发布器成功；改为 true 则在 Clock 发布器处返回 134。SUPER 改为只有显式调用 `setSimTime()` 时才分配时钟发布器，标准飞行没有调用它，仍由 PC HIL 桥唯一发布时钟；没有关闭仿真时间或改用墙钟。
+
+**PC 仓库根目录**：已完成目标构建后，`python3 stage3/board/probes/build.py` 可复用该构建的真实编译/链接命令生成 `artifacts/robopi-stage3/probes/ros_topics`。探针不发送运动命令；按 HDC skill 传输并 chmod 后，在与 release 相同的 ROS/DDS 环境中运行，比较 `--ros-args -p use_sim_time:=false` 与 true。当前镜像预期后者复现上述故障，不能把该负对照写成通过。完整日志在迁移验证目录；换镜像应重新核实。
+
+### 搜索期限与板端性能回归
+
+当前 `stage3/board/patches/` 还包含两项保持既有搜索语义的适配：启动时不变的高度环境配置缓存，避免每个邻格反复 getenv；显式 Release `-O3` 防止 SDK 后加的 `-O2` 覆盖上游优化级别。另补充超时实际耗时/展开次数日志，不改期限、速度、地图或返回码。配置变更仍需 down/up。
+
+**PC 仓库根目录**，完成目标 build 后：`uv run stage3/board/probes/astar.py --budget 0.1` 复用上游真实 A* 回归，生成板端空图探针及配置。按 HDC skill 上传生成的 `astar_budget`、`astar-empty.yaml` 并 chmod；在 release 的 ROS/私有库环境下，用域 191、ROS_LOCALHOST_ONLY=1、独立 ROS_LOG_DIR、unset FASTRTPS_DEFAULT_PROFILES_FILE 运行 `<探针路径> <配置路径>`。探针不连接 PX4、Agent 或 AirSim，不发运动指令；六项必须打印预期 CASE 与 WALL_SECONDS 并正常退出。`--budget 5` 仅供测量未优化版本完整耗时，不能计为 0.1 秒期限通过或写入飞行配置。真实树林与故障验收仍使用原期限，失败保留原记录。
+
+### 端到端 profile 与显式降级配置
+
+**PC**：完成带 `SUPER-runtime-profile.patch` 的目标 build/deploy 后，在本机 runtime JSON 增加 `"board_profile": true`，按前文以太网与 `--no-display` 命令 up。默认不记录 profile。原生规划器分别记录 PlanFromRest、ReplanOnce、探索/备用轨迹及 A* 的单调墙钟、线程 CPU 和进程 CPU；现有节点原位记录原始点云发出、板端接收/配准、有效指令接收与 setpoint 发布，避免板端另起一个高频观察节点。
+
+`status` 给出本次 run_dir。**PC 终端 A** 在任务前运行以下只读旁路（替换容器及本次 run 目录，默认示例 120 秒，可设为 660 秒做持续观察，上限 1800 秒）；**终端 B** 执行前文 task，确认 Disarmed 后 down：
+
+```bash
+docker exec '<本次PC容器>' bash -lc \
+  'source /opt/ros/humble/setup.bash; source /opt/px4_ws/install/local_setup.bash; source /super_ws/install/local_setup.bash; python3 -u /lesson/stage3/super/airsim/diagnostics/trace_ros.py --seconds 120 --token profile --compact' \
+  > '<本次run目录>/observer-profile.jsonl'
+# down 已取回 board-logs/profile；PC 原始记录在 profile/raw.jsonl。
+uv run stage3/board/analyse_profile.py '<本次run目录>'
+# 点云队列与失流诊断，可分析同一实例中的多次任务及降落后持续采样。
+uv run stage3/board/analyse_cloud.py '<本次run目录>'
+```
+
+点云诊断逐帧记录原始云接收、解码 CPU/墙钟、配准发布和控制桥新鲜度接受结果；每秒记录队列长度、最老帧年龄、位姿及输入/输出新鲜度，溢出、过期、插值失败分别记录原因与位姿括区。`cloud-summary.json` 按分钟汇总，并以同一原始帧时间戳关联 PC 发布记录与板端接收空窗，不把两台机器的绝对单调时钟相减。PC 发布事件记录在 publish 调用前，不能单独代替线缆报文证据。默认关闭 profile，队列、算法和保护门限不因观测改变。
+
+正常 down 结束容器时观察器可能随容器退出；保留已有 JSONL，分析必须有实际飞行报告及完整测量文件，缺项不会伪装成 0 延迟。点云总时长以 PC 发出→PC 收到板端配准结果的同机单调时钟计算，再扣除板内驻留；余量仍包含双向 DDS、序列化和回调调度，不是独立单向网络延迟。嵌套 scope 不相加，线程 CPU 之外的时间可能是调度、锁或阻塞；进程 CPU 还包含其他线程。profile 产生额外开销，不能替代关闭 profile 后的飞行验收。
+
+经用户授权的临时降级由本机 runtime 的 `"planner_timing": "robopi-relaxed"` 显式选择；默认 `baseline` 不变，仅限 RoboPi 后端。保留 `replan_forward_dt=0.1` 仿真秒，仅增加 `replan_wall_limit=0.35` 墙钟秒：总重规划必须同时满足墙钟不超过 350 ms、消耗的仿真时间不超过原前视的 90%（90 ms）；仿真时间倒退也拒绝。默认 baseline 保持原 90 ms 墙钟门限。该配置用于低于实时速度的仿真，不能据此给实机放宽；指令/雷达/时钟失流门限、A* 搜索期限、碰撞、状态、边界和限幅均保持原值。最初直接拉长前视到 0.35 s 的候选发生低速碰撞，已经撤回，不作为可用方案。需 down/up；先在已通过的低速任务回归，再扩展高速。profile 用完将 `board_profile` 关闭，不将降级模式的通过写作原 forest10 基线通过。实测范围见迁移验证。
+
+当前 `robopi-relaxed` 仍是实验档：恢复连接后的低速复验因配准点云失流保护降落，未通过，不能作为临时可用或高速验收配置；默认 baseline 未改。阶段证据与恢复后的服务状态以迁移验证为准。
+
+5 m/s 实验使用 `runtime.forest5.json` 的相同场景、settings 和八航点，按本机路径复制到 artifacts 后显式设置 `"planner_timing": "robopi-forward-200ms"`，并按板端运行命令启动。该档将 `replan_forward_dt` 从 0.1 增至 0.2 仿真秒，总仿真计算预算由 90 增至 180 ms，墙钟上限 350 ms；轨迹切换前视同步调整，仍拒绝过期或时间倒退的规划。它与只放宽墙钟的 `robopi-relaxed` 是不同实验档。指令、点云、时钟保护，A* 搜索期限、加速度和飞行控制参数不变；需冷启动 down/up，不从上次降落位置直接重启任务。关闭 profile 做飞行验证，结果见迁移验证；尚无实机适用结论。
+
+后续约 702 秒持续采样完成 3939 帧配准，无队列丢弃，采样队列最大 1；复现 3.45 秒原始云接收空窗导致保护降落。另一次 5.55 秒空窗同步记录到板端 IP 分片重组失败，已定位到网络接收层；不是逐渐增加的 Python 配准积压。该问题尚未修复，具体计数、复盘与适用边界见迁移验证的“点云持续观测与 IP 分片证据”。
+
+
+### AB 点云失流影响实验
+
+当前以 AB 单目标为基线。`runtime.forest5-ab-observe.json` 是显式 RoboPi 实验入口，任务来自 10-ab，速度设为 5 m/s，并使用前述 200 ms 前视预算；当前两个 AB 任务均显式采用下述仅观察策略。按板端步骤填写本机场景、镜像路径并冷启动；不要用八航点替代。该实验打开 profile，先启动旁路观察再执行 task，碰撞会作为实际失败记录，之后才尝试收尾降落。
+
+非 AB 任务的 `lidar_loss_action` 缺省为 `land`（既有 0.5 墙钟秒无新鲜点云降落）；当前两个 AB 配置均显式设为 `observe`。显式 `observe` 关闭飞行中的这项降落及新目标的点云新鲜度拒绝，只记录失流／恢复。起飞前仍等待健康状态和新鲜地图，状态／时钟、指令有效性与指令失流、人工降落保持原值。控制日志包含 `lidar stale/recovered`，`control.jsonl` 记录 `cloud_loss_started/ended`，可将空窗与规划指令、执行参考和碰撞时间关联。未出现失流或先因其他原因停止时，不据此推断失流后果；实验结果见迁移验证。
+
+### AB 仿真实验的中止条件（2026-10-16 门限审计）
+
+`task.forest10-ab.json` 与 `task.forest5-ab-observe.json` 均显式设置 `trajectory_limits_action=observe`、`lidar_loss_action=observe`，Docker 与 RoboPi 使用同一控制桥。任务包络、参考速度、参考加速度、跟踪偏差超限只记录，不拒绝轨迹、不裁剪参考、不自动降落；飞行中点云失流也只记录。其他任务缺省策略仍为 land。此策略用于当前 AirSim 仿真，不作为实机参数。
+
+历史录像中参考东向位置 20.00217 m 超过任务上界 20 m，控制桥直接拒绝并降落；当前逻辑已移除此类 AB 实验中止。`bounds_enu_*` 仍用于输入航点与起飞目标的静态校验，不能再解释为必须将绕障轨迹限制在其中。
+
+| 层次 | 当前条件与行为 |
+| --- | --- |
+| 控制桥任务包络 | 旧 ENU 范围为 [-60,-10,0.2]～[20,250,10] m；AB 轨迹越界只记录 |
+| 控制桥参考动态／跟踪门限 | 速度 > 任务速度+1 m/s、加速度 > 任务上限+0.5 m/s²、参考位置偏差 >3 m；AB 仅记录 |
+| 控制桥点云 | 超过 0.5 墙钟秒未收到新鲜云，AB 只记录失流／恢复；起飞前仍等待新鲜云 |
+| 控制桥指令有效性 | 非有限 p/v/a、时间戳年龄不在 [-0.05,0.3] 仿真秒、无本地位置仍拒绝并降落；错误原因单独报告 |
+| 控制桥状态与运行连续性 | 定位 >0.5、状态 >1.5、时钟不更新 >0.5 墙钟秒，估计不健康、估计重置、仿真时间倒退或退出 Offboard 会降落 |
+| 控制桥阶段等待 | 起飞 >30、初次规划 >10、轨迹指令失流 >0.5 墙钟秒会降落 |
+| 任务节点 | 控制状态 >1.5、位置或时钟 >0.5 墙钟秒失流会中止；AB 单航段 >300、总任务 >600 仿真秒会中止；到 B 并稳定后按 finish=land 正常降落 |
+| 规划器 | 虚拟地面 -2 m／天花板 11 m、局部规划范围 20 m、速度／加速度约束仍参与算法；A* 搜索预算 0.1 仿真秒，ReplanOnce 预算由 planner_timing 选择；失败可导致停发轨迹。静止终点重规划保持最多 10 仿真秒，期满停发后会触发控制桥指令失流降落 |
+| PC 任务观察器 | 实际新碰撞、任务失败、启动未确认 3 墙钟秒、等待超过 mission_timeout_s×3+60 墙钟秒会结束报告，失败收尾请求降落；runtime 外层默认 2000 墙钟秒超时 |
+| PX4 | Offboard 心跳失联 0.5 秒后按 COM_OBL_RC_ACT=4 降落；PX4 自身的估计／执行故障处理继续有效，实际值以参数快照和 ULog 为准 |
+
+门限变化写入 `trajectory_limits_changed` profile 事件及控制日志，包含具体类别、p/v/a、时间戳年龄与跟踪偏差；任务报告新增 `experiment_policies`，记录本轮策略。不要再添加隐藏的任务边界、误差门限或失流自动降落；新增会改变实验终止条件的行为必须在此表明确说明并经用户授权。上述审计不等于所有异常都继续控制：数据失效、控制失联与真实碰撞仍会结束本轮实验。
+
+PC 改动后必须 down/up 生成新任务快照；RoboPi 还须先重新 deploy 控制桥，再 down/up。已有 release、启动快照及历史录像不会被自动修改。本次修复有合成消息回归，尚未重飞 AB。
+
+## 飞行录像与离线回放（PC）
+
+前置条件：PC 有 ffmpeg/libx264，离线回放使用 `flight-review` 的 NumPy/Matplotlib；板端算法不增加依赖。已有飞行报告可以生成遥测回放，但没有事先保存的 RGB／点云不能事后还原。失败报告的 `records` 在首次失败处结束，不包含 finally 收尾降落；实景录像可覆盖这一段。
+
+实景录像使用独立外部相机，640×360，默认每墙钟秒抓取 2 帧，NoDisplay 下也可用。先从本次实际使用的 settings 生成一个新副本（不会覆盖已有文件），将本机 AB runtime 的 settings 改为该输出，再按前文 down/up：
+
+```bash
+uv run stage3/super/airsim/flight_video.py configure \
+  stage3/super/airsim/settings.forest-fast.json artifacts/settings.video.local.json
+# 在本机 runtime 中只改 settings 为上面文件的绝对路径；其他飞行参数保持本次实验原值。
+```
+
+**PC 终端 A**：替换当前 state-dir 和实际 run_dir；output 必须是全新的目录。可以先用另一目录录 3～6 秒静止预热并查看 PNG，再录整次飞行。录像器只查询车辆位姿并移动外部相机，不发布飞行控制、不改飞机位姿；真值只用于拍摄。
+
+```bash
+uv run stage3/super/airsim/flight_video.py record \
+  --state-dir '<本次state-dir>' --output '<本次run_dir>/video' --seconds 360 --fps 2
+```
+
+**PC 终端 B**：按前文 task 执行 AB；确认解除解锁后，用 `touch '<本次run_dir>/video/stop'` 结束录像，等待终端 A 返回，再正常 down。录像遇到连续三次 RPC 错误会停止并留存 errors.jsonl，不接管飞机。相机每帧的仿真时间戳、采样墙钟、耗时和相机姿态在 frames.jsonl，原始 PNG 在 video/frames/。
+
+```bash
+# 离线编码，按相机仿真时间戳保持每张实拍帧，不做运动补帧。
+uv run stage3/super/airsim/flight_video.py encode \
+  '<本次run_dir>/video' '<本次run_dir>/airsim-third-person.mp4' --gamma 1.6
+```
+
+MP4 使用兼容播放器的 20 fps 容器，相同图像重复保持，实际采样仍是 2 Hz 墙钟；时间轴使用 AirSim 仿真时间，画面角标为录像起点后的仿真时长。`--gamma` 只调输出亮度，原始 PNG 保留。它不等于无开销录像；summary.json 记录抓帧耗时，本轮视频条件下结果见迁移验证。
+
+只看轨迹时可以不启用相机，直接离线生成视频；若要显示障碍物，在前述 `trace_ros.py --compact` 旁路命令额外加 `--cloud-dir /run/airsim/visual-clouds`，每墙钟秒保存一帧配准点云，仅为显示限至最多 25000 点，不改变算法输入。旁路在 task 前启动，down 后退出。
+
+```bash
+uv run --extra flight-review stage3/super/airsim/diagnostics/replay_video.py \
+  '<本次run_dir>/fly-task-实际时间戳.json' '<本次run_dir>/telemetry-replay.mp4' \
+  --cloud-dir '<本次run_dir>/visual-clouds'
+# 未保存点云时省略 --cloud-dir，画面会明确标示缺少障碍点云。
+```
+
+回放按仿真时间展示已记录的 PX4 估计位置、下发参考、高度和速度；没有机体姿态的补造，不能把它当作相机实拍。点云只取当前时刻以前最后保存的一帧，并标注其年龄。视频、帧、点云和运行日志都留在忽略 Git 的 artifacts，不提交仓库。

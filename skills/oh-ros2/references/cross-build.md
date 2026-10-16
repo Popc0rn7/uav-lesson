@@ -50,3 +50,13 @@ set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
 产物至少区分构建树、安装 overlay、可部署 runtime。需要 `ros2 run`/`ros2 launch` 的包同时保留 ament index、share、消息资源和可执行入口；只有二进制不能证明 ROS 包安装完整。
 
 通过编译后，再按授权执行板端加载、消息与业务验证。链接成功不保证运行期 Python ABI、类型支持或 DDS 一致。
+
+## 本仓库 SUPER 迁移补充（2026-10-16）
+
+当前目标快照需要包含 `install/bin`、`out/bin` 和 `out/lib/*.a`：Fast DDS、foonathan、Qhull/FLANN 的 CMake 导出即使只链接库也会检查这些 imported 文件，不能用空文件占位。原始归档和补充归档分别保留校验记录。libyaml 已有 AArch64 库/头文件而缺 yaml CMake 元数据时，构建侧补 Findyaml 模块即可，不改板端安装。
+
+当前镜像 PNG 通用链接指向 1.6.43，头文件及 PCL 的 PNG16_0 依赖对应 1.6.50；构建显式选择同一快照内的 1.6.50 并放到 release 私有 lib，不能全局替换系统链接。原库仅有 `$ORIGIN` RUNPATH，可按该特例审计保留；其他主机绝对 RPATH 仍拒绝。板端 ldd/加载仍需另验。
+
+SUPER 的 libdw/backward 崩溃处理通过独立开关在 OHOS 关闭；同时显式 include iostream，避免依赖 backward 的间接头文件。Linux 默认仍开启。完整补丁维护在 `stage3/board/patches/`，构建幂等检查/应用，算法源码没有替换实现。
+
+增量构建注意：同一 merged install 中旧 SUPER 头文件会通过 ROG-Map 导出的非 system include 抢先于源码的 system include，被新一轮编译误用。构建补丁令 SUPER 源目录优先且非 system，防止“改源码却编译旧安装头文件”。这也暴露原诊断返回码函数对未知值缺 return，现给出 Unknown 文本，不改合法返回码或规划判断。

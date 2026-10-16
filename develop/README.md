@@ -125,4 +125,6 @@ Stage 3 的资源固定为 ROS 域 10、Gazebo 分区 `uav-stage3`、Agent UDP 8
 
 ## RoboPi 开发入口
 
-板端交付物统一维护在 [`robopi/`](../robopi/)，迁移流程与逐层验收遵循 [`robopi/AGENTS.md`](../robopi/AGENTS.md)。当前仅迁入 Stage 1 文件，PC 部署入口仍为 `stage1/deploy.py`；Stage 3/5 的双 Docker 结果尚不能视为板端验收。仓库 `skills/` 同步维护 HDC、OpenHarmony ROS、Houmo 与 Wi-Fi 的 Codex skills。
+板端交付物统一维护在 [`robopi/`](../robopi/)，迁移流程与逐层验收遵循 [`robopi/AGENTS.md`](../robopi/AGENTS.md)。Stage 1 部署入口为 `stage1/deploy.py`；Stage 3 已有原生板端交付与短程实测，完整 AB 任务仍未验收，Stage 5 尚未上板。仓库 `skills/` 同步维护 HDC、OpenHarmony ROS、Houmo 与 Wi-Fi 的 Codex skills。
+
+当前迁移以 AirSim＋PX4＋ROS/SUPER（GNSS、无 LIO）为标准，Gazebo 章节保留既有流程。AirSim 板端模式复用统一 runtime，PC 单容器运行仿真接入、RoboPi 原生运行算力节点；准备、无显示测试及验证边界统一见 [AirSim README](../stage3/super/airsim/README.md#robopi-算力后端2026-10-16迁移验证中)。

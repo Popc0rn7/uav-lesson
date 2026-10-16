@@ -14,7 +14,7 @@ ARG BUILD_JOBS=2
 #     -exec sed -i 's|http://|https://|g' {} +
 RUN apt-get update && apt-get install -y --no-install-recommends \
        ca-certificates curl gnupg git cmake build-essential pkg-config \
-       python3-colcon-common-extensions python3-pytest python3-yaml python3-numpy python3-scipy \
+       python3-colcon-common-extensions python3-pytest python3-yaml python3-msgpack python3-numpy python3-scipy \
        libeigen3-dev libompl-dev libpcl-dev libyaml-cpp-dev libdw-dev libspdlog-dev \
        ros-humble-pcl-conversions ros-humble-pcl-ros ros-humble-tf2-ros \
        ros-humble-rclcpp-components ros-humble-rosidl-default-generators \

@@ -1,0 +1,2 @@
+# Unified diff 的空白上下文行属于补丁语法，不能按源文件删除。
+stage3/board/patches/*.patch -whitespace

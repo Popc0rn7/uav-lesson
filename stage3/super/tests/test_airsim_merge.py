@@ -63,12 +63,33 @@ class MergeTests(unittest.TestCase):
                 else:
                     with self.assertRaises(ValueError):load_task(path)
 
+    def test_lidar_loss_policy_is_explicit_and_validated(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory)/'task.json'
+            for action in ('land', 'observe'):
+                path.write_text(json.dumps(dict(self.task,lidar_loss_action=action)))
+                self.assertEqual(load_task(path)['lidar_loss_action'],action)
+            path.write_text(json.dumps(dict(self.task,lidar_loss_action='ignore-typo')))
+            with self.assertRaises(ValueError):load_task(path)
+
     def test_reject_route_outside_bounds(self):
         task = dict(self.task,waypoints_enu_m=[[100,0,2]])
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory)/'bad.json'
             path.write_text(json.dumps(task))
             with self.assertRaisesRegex(ValueError,'边界'):
+                load_task(path)
+
+    def test_ab_experiment_policies_and_validation(self):
+        for filename in ('task.forest10-ab.json','task.forest5-ab-observe.json'):
+            task=load_task(HERE/filename)
+            self.assertEqual(task['trajectory_limits_action'],'observe')
+            self.assertEqual(task['lidar_loss_action'],'observe')
+        self.assertEqual(self.task['trajectory_limits_action'],'land')
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory)/'task.json'
+            path.write_text(json.dumps(dict(self.task,trajectory_limits_action='typo')))
+            with self.assertRaisesRegex(ValueError,'trajectory_limits_action'):
                 load_task(path)
 
 

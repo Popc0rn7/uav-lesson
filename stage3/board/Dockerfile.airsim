@@ -1,0 +1,21 @@
+# One PC container, two process-local ABIs: unchanged Noble PX4 + Jammy ROS Humble.
+ARG PX4_IMAGE=px4io/px4-sitl-gazebo@sha256:29a5a1b5af77e5d39b67bc6664d36acead63f9dfb829475216522b1feec8036e
+ARG ROS_IMAGE=uav-computer-ros-humble:local
+FROM ${ROS_IMAGE} AS ros-airsim
+# AirSim RPC uses MessagePack; older local Humble images predate this dependency.
+RUN apt-get update && apt-get install -y --no-install-recommends python3-msgpack && rm -rf /var/lib/apt/lists/*
+FROM ${PX4_IMAGE} AS px4
+COPY export_px4_runtime.sh /tmp/export_px4_runtime.sh
+RUN sh /tmp/export_px4_runtime.sh
+FROM ros-airsim
+COPY --from=px4 /opt/px4-gazebo /opt/px4-gazebo
+COPY --from=px4 /px4-runtime /opt/px4-runtime
+RUN mv /opt/px4-gazebo/bin/px4 /opt/px4-gazebo/bin/px4.native
+COPY --chmod=755 px4_abi_wrapper.sh /opt/px4-gazebo/bin/px4
+RUN /opt/px4-runtime/ld-linux-x86-64.so.2 --library-path /opt/px4-runtime \
+      --list /opt/px4-gazebo/bin/px4.native > /tmp/px4-ldd.txt && \
+    ! grep -q 'not found' /tmp/px4-ldd.txt
+ENV PATH="/opt/px4-gazebo/bin:${PATH}"
+LABEL io.uav-lesson.airsim.pc-bridge="1"
+ENTRYPOINT ["/bin/bash"]
+CMD ["/lesson-airsim/run_pc_nodes.sh"]

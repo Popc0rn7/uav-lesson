@@ -217,3 +217,31 @@ print(reply.choices[0].message.content)
 - 运行课程本地包的vqa_client.py识别Gazebo画面中的红立方体（3.426秒、64输出tokens达到长度上限）；同时把路面黄色标记猜成支撑结构/阴影，说明语义回答仍会出错，不能当作可靠几何或物体身份判定。
 - 25项主机测试通过，3项因主机未安装Uvicorn跳过；板端实际Uvicorn启动和真实HTTP/VQA分别验证。Python语法、Shell语法、diff检查通过。当前平铺布局的完整ROS跨机聊天没有重跑。
 - 更新前的板端小文件备份位于 `/data/local/workspace/stage1/.backup-vqa-prod-sync-20261015/`，保留原服务控制入口。不自动配置开机启动。
+
+## 新目录部署回归（2026-10-16）
+
+**PC 仓库根目录**，先按教师准备流程取得匹配的上游 dist、整个模型目录及许可证。实际部署显式指定 HDC 目标，不再修改源码 TARGET；本地检查不连接设备：
+
+```bash
+python3 stage1/deploy.py --check-local
+python3 stage1/deploy.py --target '<本次确认的connect-key>'
+```
+
+成功判据：本地所有必需文件存在且不是 LFS 指针；部署逐文件 SHA-256 校验完成。重复部署相同文件跳过，遇到不同已有文件停止。先检查服务与文件、备份旧版本，再安排更新，不用本入口强行覆盖活动程序。
+
+**RoboPi shell**，完成模型/驱动/ROS 预检后，沿用前文 `cd /data/local/workspace/stage1; sh serve.sh` 启动。**PC 仓库根目录**，已有本地 ROS 镜像、以太网 DDS 可达、板端 ROS bridge 与模型 ready 后执行：
+
+```bash
+python3 stage1/verify.py --target '<本次确认的connect-key>' \
+  --image '<已准备的Humble镜像摘要>'
+```
+
+回归入口使用 HDC 读取本板 HTTP health及worker身份，在临时 PC ROS容器中顺序发出两次文本请求和一次空请求，再确认同一 worker PID及启动时刻；预期前两次status=ok且输出非空、空请求status=invalid。报告位于忽略Git的 `artifacts/stage1-validation/result.json`。它不会启动模型、重启ROS桥、自动拉镜像或调用付费API；回复内容需结合报告核对。忙碌、ROS桥退出重启和VQA另按前文章节验证，不能仅凭本入口通过就扩展验收范围。
+
+2026-10-16 实测：43 个交付文件完整部署及 SHA-256 核验通过，已有大模型未重传。首次加载驱动因 DMA/CMA 内存不足而 probe 失败；经用户授权重启后先加载相同驱动，PCI 绑定及 runtime 枚举 1 个 NPU 通过。等待健康接口 ready 后，PC 经实际以太网 DDS 发出的“1+1”和首都问题分别收到“2”“北京”，耗时 0.55/0.50 秒；空请求 0.003 秒返回 invalid。前后 worker PID=2226、start_ticks=16973 一致，确认常驻复用。报告为 `artifacts/stage1-validation/post-reboot-ready.json`；第一次在模型加载期间执行的健康检查超时单独保留，未记为通过。HDC 18080→8080 下，VQA 对 turtlesim humble 乌龟图回答“乌龟”（0.651 秒），这是单图回归，不扩展为通用视觉准确率验收。以太网临时地址及源策略路由须在每次重启后恢复，配置见 AirSim README 的板端通信说明。
+
+同日附加回归：仅停止并重启已核实身份的本项目 ROS bridge，两次文本和空请求再次通过；worker 仍为 PID 2226/start_ticks 16973。真实并发推理测试中，首请求返回 200，健康接口观测 busy=true 时提交的第二请求返回 429，完成后恢复 ready。证据分别为 `artifacts/stage1-validation/bridge-restart.json`、`busy-post-reboot.json`；没有杀死其他服务或调用付费 API。
+
+同日 Stage 3 飞行测试结束后已恢复本项目服务，worker PID=7368/start_ticks=754599；以太网 ROS 两次文本（0.59/0.50 秒）和空请求再次通过，前后 worker 一致。当前健康 ready，HDC 本次 18080→8080 映射可用；证据 `artifacts/stage1-validation/restored-after-flight.json`。该临时网络/转发与服务状态不等于开机自动恢复配置。
+
+后续 Stage 3 profile 结束及 USB/以太网恢复后，再次恢复模型/桥，worker PID=8714/start_ticks=1433105；健康 ready、以太网 ROS 两次文本约 0.60/0.50 秒、空请求拒绝与常驻复用通过，证据 `artifacts/stage1-validation/restored-after-profile.json`。HDC 18080→8080 本次映射已恢复。

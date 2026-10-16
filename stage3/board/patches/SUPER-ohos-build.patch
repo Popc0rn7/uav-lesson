@@ -1,0 +1,110 @@
+diff --git a/super_planner/Apps/fsm_node_ros2.cpp b/super_planner/Apps/fsm_node_ros2.cpp
+index 8efd31d..6f096d8 100755
+--- a/super_planner/Apps/fsm_node_ros2.cpp
++++ b/super_planner/Apps/fsm_node_ros2.cpp
+@@ -29,6 +29,7 @@
+  * Test code:
+  *      roslaunch simulator test_env.launch
+  * */
++#ifdef SUPER_ENABLE_STACKTRACE
+ #define BACKWARD_HAS_DW 1
+ 
+ #include "utils/header/backward.hpp"
+@@ -36,6 +37,7 @@
+ namespace backward {
+     backward::SignalHandling sh;
+ }
++#endif
+ 
+ 
+ using namespace fsm;
+diff --git a/super_planner/CMakeLists.txt b/super_planner/CMakeLists.txt
+index 5497ce0..1a0d35b 100755
+--- a/super_planner/CMakeLists.txt
++++ b/super_planner/CMakeLists.txt
+@@ -3,6 +3,11 @@ project(super_planner)
+ 
+ set(CMAKE_CXX_STANDARD 17)
+ option(RELEASE "Enable Release mode" ON)
++set(SUPER_STACKTRACE_DEFAULT ON)
++if(CMAKE_SYSTEM_NAME STREQUAL "OHOS")
++    set(SUPER_STACKTRACE_DEFAULT OFF)
++endif()
++option(SUPER_ENABLE_STACKTRACE "Enable libdw signal stack traces" ${SUPER_STACKTRACE_DEFAULT})
+ #if (RELEASE)
+ set(CMAKE_BUILD_TYPE Release)
+ set(CMAKE_CXX_FLAGS "-O3 -Wall")
+@@ -25,8 +30,7 @@ message(STATUS "ROS version: ${ROS_VERSION}")
+ 
+ # for CLION to search the package, user should change to his/her own relative location
+ set(CMAKE_PREFIX_PATH ../../../install)
+-include_directories(
+-        SYSTEM
++include_directories(BEFORE
+         include
+         ../../../devel/include
+         ${catkin_INCLUDE_DIRS}
+@@ -59,9 +63,12 @@ set(third_party_libs
+         #            ${OpenCV_LIBRARIES}
+         ${PCL_LIBRARIES}
+         yaml-cpp
+-        -ldw
+ )
+ 
++if(SUPER_ENABLE_STACKTRACE)
++    list(APPEND third_party_libs dw)
++endif()
++
+ set(ros_libs
+         rclcpp
+         std_msgs
+@@ -88,6 +95,9 @@ file(GLOB_RECURSE srcs CONFIGURE_DEPENDS src/*.cpp include/*.h include/*.hpp)
+ add_library(super
+         ${srcs}
+ )
++if(SUPER_ENABLE_STACKTRACE)
++    target_compile_definitions(super PUBLIC SUPER_ENABLE_STACKTRACE=1)
++endif()
+ target_include_directories(super PUBLIC
+         ${includes})
+ ament_target_dependencies(super PUBLIC
+@@ -98,6 +108,9 @@ ament_target_dependencies(super PUBLIC
+ add_executable(fsm_node
+         Apps/fsm_node_ros2.cpp
+ )
++if(SUPER_ENABLE_STACKTRACE)
++    target_compile_definitions(fsm_node PRIVATE SUPER_ENABLE_STACKTRACE=1)
++endif()
+ target_link_libraries(fsm_node PUBLIC
+         super
+         ${third_party_libs}
+diff --git a/super_planner/include/super_core/super_ret_code.hpp b/super_planner/include/super_core/super_ret_code.hpp
+index 0c580bd..b9a57c9 100755
+--- a/super_planner/include/super_core/super_ret_code.hpp
++++ b/super_planner/include/super_core/super_ret_code.hpp
+@@ -53,6 +53,7 @@ namespace super_planner {
+         case SUPER_NO_START_POINT:
+             return "Cannot find a start point in the local map";
+         }
++        return "Unknown return code";
+     };
+ }
+ #endif
+diff --git a/super_planner/include/utils/header/type_utils.hpp b/super_planner/include/utils/header/type_utils.hpp
+index 374691d..8a79ed6 100644
+--- a/super_planner/include/utils/header/type_utils.hpp
++++ b/super_planner/include/utils/header/type_utils.hpp
+@@ -25,10 +25,13 @@
+ #define SUPER_TYPE_UTILS_HPP
+ 
+ // comment or uncomment the following line to enable or disable the utils
++#include <iostream>
+ #include <super_utils/color_text.hpp>
+ #include <super_utils/eigen_alias.hpp>
+ #include <super_utils/color_msg_utils.hpp>
++#ifdef SUPER_ENABLE_STACKTRACE
+ #include <utils/header/backward.hpp>
++#endif
+ 
+ 
+ 

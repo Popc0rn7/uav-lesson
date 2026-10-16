@@ -1,0 +1,14 @@
+diff --git a/super_planner/src/super_core/astar.cpp b/super_planner/src/super_core/astar.cpp
+index dbd4a26..b293e98 100644
+--- a/super_planner/src/super_core/astar.cpp
++++ b/super_planner/src/super_core/astar.cpp
+@@ -514,7 +514,8 @@ namespace path_search {
+             double time_2 = ros_ptr_->getSimTime();
+             if (!cfg_.visual_process && (time_2 - time_1) > time_out) {
+                 fmt::print(fg(fmt::color::indian_red),
+-                           "Failed in A star path searching !!! {} seconds time limit exceeded.\n", time_out);
++                           "Failed in A star path searching !!! {} seconds time limit exceeded; elapsed={} s, iterations={}.\n",
++                           time_out, time_2-time_1, num_iter);
+                 return TIME_OUT;
+             }
+         }

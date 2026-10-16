@@ -55,4 +55,6 @@ uv run stage3/demo.py '这个产品太好用了！'
 
 课程 hands-on 文档和教师准备脚本将随实际验证补齐；路线图中的待办不代表现在已经可运行。
 
-板端开发与交付统一见 [robopi/AGENTS.md](robopi/AGENTS.md)，实际板端文件放在 `robopi/stageN/`；仓库 `skills/` 维护配套 Codex skills。当前目录重组尚未经过板端部署回归。
+板端开发与交付统一见 [robopi/AGENTS.md](robopi/AGENTS.md)，实际板端文件放在 `robopi/stageN/`；仓库 `skills/` 维护配套 Codex skills。Stage 1 新布局已完成部署回归，Stage 3 的板端短程链路已验证，完整 AB 任务仍待验收。
+
+当前 Stage 3 标准主线为 AirSim＋PX4＋ROS＋SUPER（GNSS、无 LIO）；Docker 2 板端迁移入口及 NoDisplay 验证流程见 [AirSim README](stage3/super/airsim/README.md#robopi-算力后端2026-10-16迁移验证中)。已验证范围与换机接续见 [RoboPi 迁移交接](docs/stage3/RoboPi-handoff.md)。

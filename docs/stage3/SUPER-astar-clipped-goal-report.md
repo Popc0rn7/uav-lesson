@@ -6,7 +6,7 @@
 
 ## 代码来源与影响范围
 
-已核对官方仓库的 [A* 实现](https://github.com/hku-mars/SUPER/blob/2ad3419c127a617c6d7df6925e81a14175a9c096/super_planner/src/super_core/astar.cpp)及 [SuperPlanner 实现](https://github.com/hku-mars/SUPER/blob/2ad3419c127a617c6d7df6925e81a14175a9c096/super_planner/src/super_core/super_planner.cpp)，基准提交为 `2ad3419c127a617c6d7df6925e81a14175a9c096`。2026-10-16 再次检查官方 master，相关控制流仍存在。本地仿真分支基于上述版本，修改前基线为 `61c1d6244ce2950dbf7052a1a3e8caeab0773088`；本地没有修改这几处分支的原始返回值语义。修复已独立提交为 `4461128ff139ab986c0229a6e29f7e17c060d4cf`（本地分支 `fix/clipped-goal-horizon`，尚未推送）。
+已核对官方仓库的 [A* 实现](https://github.com/hku-mars/SUPER/blob/2ad3419c127a617c6d7df6925e81a14175a9c096/super_planner/src/super_core/astar.cpp)及 [SuperPlanner 实现](https://github.com/hku-mars/SUPER/blob/2ad3419c127a617c6d7df6925e81a14175a9c096/super_planner/src/super_core/super_planner.cpp)，基准提交为 `2ad3419c127a617c6d7df6925e81a14175a9c096`。2026-10-16 再次检查官方 master，相关控制流仍存在。本地仿真分支基于上述版本，修改前基线为 `61c1d6244ce2950dbf7052a1a3e8caeab0773088`；本地没有修改这几处分支的原始返回值语义。修复已独立提交为 [4461128](https://github.com/Popc0rn7/SUPER-sim/commit/4461128ff139ab986c0229a6e29f7e17c060d4cf)，并已推送至课程 fork 的 `feat/sim`，尚未向官方仓库发布 issue 或 PR。
 
 影响条件是：B 在 A* 窗口外，裁剪/邻域调整成功，且搜索先到达 C，而非先达到搜索距离截止。不是每个远目标都会触发；窗口足够大或绕行距离较长时，可能先返回正常的 `REACH_HORIZON`。
 

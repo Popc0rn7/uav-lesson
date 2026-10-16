@@ -7,8 +7,8 @@
 - stage1/chat.py：PC 聊天入口。
 - stage1/deploy.py：PC 固定部署入口，无命令行参数；必须显式填写本次设备 TARGET，留空会拒绝连接。
 - stage1/download_model.py：PC 课前下载模型。
-- stage1/robopi/：板端待传文件，内容对应 /data/local/workspace/stage1/。
-- stage1/robopi/qwen_infer/：上游运行工具，忽略 Git；不在本仓库维护其源码。
+- robopi/stage1/：板端待传文件，内容对应 /data/local/workspace/stage1/。
+- robopi/stage1/qwen_infer/：上游运行工具，忽略 Git；不在本仓库维护其源码。
 - artifacts/models/：本机模型与 embedding 缓存，可以使用软链接。
 - src/：仅供跨阶段通用代码使用，目前没有需要建立的内容。
 
@@ -20,9 +20,9 @@ PC 无原生 ROS 时，先按 [Hands-on：课前拉取 ROS Humble 镜像](stage1
 在课程仓库根目录执行：
 
 ```sh
-mkdir -p stage1/robopi/qwen_infer
-cp -a ../postmo-modelzoo/qwen_ohos_infer/dist/. stage1/robopi/qwen_infer/
-cp ../postmo-modelzoo/LICENSE stage1/robopi/qwen_infer/LICENSE
+mkdir -p robopi/stage1/qwen_infer
+cp -a ../postmo-modelzoo/qwen_ohos_infer/dist/. robopi/stage1/qwen_infer/
+cp ../postmo-modelzoo/LICENSE robopi/stage1/qwen_infer/LICENSE
 ```
 
 应包含 qwen_ohos_infer、lib/、run.sh、run.py、models.json、server.py、vqa_client.py、requirements-server.txt 和 LICENSE。

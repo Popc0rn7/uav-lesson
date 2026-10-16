@@ -44,12 +44,13 @@
 ## 仓库布局
 
 - `stageN/`：该阶段在 PC 使用的代码和部署入口。
-- `stageN/robopi/`：该阶段要传到 RoboPi 并使用的文件；部署时内容对应板端阶段目录。
+- `robopi/`：板端交付文件的唯一维护位置，按 `stageN/` 对应板端阶段目录；开发、部署和迁移验收遵循 `robopi/AGENTS.md`。
+- `skills/`：仓库维护的 Codex 板端 skills，随代码同步；使用时读取对应 `SKILL.md`，不要只依赖个人目录中的旧副本。
 - `src/`：仅放跨阶段通用工具或包，没有则不创建。
 - `artifacts/models/`：大模型缓存或软链接；embedding 位于模型目录 hmquant/quant_embedding.bin，部署保持整个模型目录的相对结构。大文件不提交 Git。
 - `docs/`：课程文档；`docs/AGENTS.md` 是代理准备板端环境的流程，随实现跟进。
 
-上游推理工具直接获取运行产物，Stage 1 放在 stage1/robopi/qwen_infer/ 并忽略跟踪。
+上游推理工具直接获取运行产物，Stage 1 放在 robopi/stage1/qwen_infer/ 并忽略跟踪。
 不复制维护上游 main.cc、编译工程或模型转换源码，不再使用 prepare_qwen_bundle.py 和 manifest。
 不预建空目录，不为同一流程维护重复说明。
 

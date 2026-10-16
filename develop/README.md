@@ -122,3 +122,7 @@ python3 develop/lesson.py up --dry-run
 Stage 3 的资源固定为 ROS 域 10、Gazebo 分区 `uav-stage3`、Agent UDP 8888、真值 HTTP 8096；同一 PC 同时只运行一组实例。容器已存在时先 inspect，确认落地后再 down，不从另一工作区关闭当前实验。
 
 详细操作与排障见 [Hands-on](../docs/stage3/Hands-on.md)，实测和未验收项见 [Validation](../docs/stage3/Validation.md)，开发边界见 [Development](../docs/stage3/Development.md)。
+
+## RoboPi 开发入口
+
+板端交付物统一维护在 [`robopi/`](../robopi/)，迁移流程与逐层验收遵循 [`robopi/AGENTS.md`](../robopi/AGENTS.md)。当前仅迁入 Stage 1 文件，PC 部署入口仍为 `stage1/deploy.py`；Stage 3/5 的双 Docker 结果尚不能视为板端验收。仓库 `skills/` 同步维护 HDC、OpenHarmony ROS、Houmo 与 Wi-Fi 的 Codex skills。

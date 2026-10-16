@@ -174,7 +174,7 @@ hdc -t '<connect-key>' fport ls
 hdc -t '<connect-key>' fport tcp:18080 tcp:8080
 curl --noproxy '*' http://127.0.0.1:18080/health
 curl --noproxy '*' http://127.0.0.1:18080/v1/models
-python3 stage1/robopi/qwen_infer/vqa_client.py \
+python3 robopi/stage1/qwen_infer/vqa_client.py \
   --image /path/on/pc/image.png --prompt '请描述图片中的主要物体。'
 ```
 

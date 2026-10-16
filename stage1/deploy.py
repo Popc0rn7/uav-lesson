@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""PC：将 stage1/robopi 和模型目录部署到固定板端目录。"""
+"""PC：将 robopi/stage1 和模型目录部署到固定板端目录。"""
 import hashlib
 from pathlib import Path
 import shlex
@@ -8,7 +8,7 @@ import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 TARGET = ""  # 必须填写本次确认的 connect key，不使用默认设备。
-BOARD = ROOT / "stage1/robopi"
+BOARD = ROOT / "robopi/stage1"
 REMOTE_STAGE = "/data/local/workspace/stage1"
 MODEL = ROOT / "artifacts/models/Qwen3.6-35B-A3B/qwen3.6-35b-a3b_w4a8_256_256k_b1_1chip_2cores"
 REMOTE_MODEL = "/data/local/workspace/models/" + MODEL.name

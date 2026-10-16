@@ -45,7 +45,7 @@ def guidance(observation, stage=None, default_duration_s=60, progress=None):
         'suggested_follow_timeout_s': window,
         'suggested_follow_budget': None if window is None else math.ceil(window/JEV_INTERVAL_S)+3,
         'budget_formula': 'ceil(stage_timeout_s / jev_request_interval_s) + 3 retry/startup calls',
-        'review_policy': 'aircraft holds; simulation advances 3s then pauses until Qwen returns; task timeout is wall clock',
+        'review_policy': 'aircraft holds; simulation and target motion continue throughout Qwen requests; task timeout is wall clock',
         'available_recovery': 'no active search; reacquire only waits for target to return into current view',
         'advisory_only': True,
     }

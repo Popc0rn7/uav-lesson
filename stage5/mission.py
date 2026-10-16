@@ -39,14 +39,12 @@ def main():
         initial_plan = upgrade_legacy(json.loads(args.plan.read_text()),args.jev_budget,args.seconds) if args.plan else None
         # 延迟导入，纯生命周期测试不依赖飞行硬件。
         from agent_runtime import FlightRuntime, ReadOnlyRuntime
-        from simulation_wait import SimulationWait
         factory = ((lambda deadline: ReadOnlyRuntime(config)) if args.plan_only else
                    (lambda deadline: FlightRuntime(config,output,deadline,args.target_speed)))
         task = args.task or (initial_plan['mission'] if initial_plan else '跟随红色车辆，在车尾后方8米、上方2米持续跟随。')
         runner = TaskRunner(task,model,factory,output,args.budget,args.timeout,args.seconds,
             initial_plan,args.plan_only,request_timeout=float(config.get('QWEN_TIMEOUT','120')),
-            summary_timeout=float(config.get('QWEN_SUMMARY_TIMEOUT','30')),
-            simulation=SimulationWait(config.get('STAGE5_RGB_URL','http://127.0.0.1:8189/rgb')))
+            summary_timeout=float(config.get('QWEN_SUMMARY_TIMEOUT','30')))
         from mission_registry import register
         register(output)
         return runner.run()

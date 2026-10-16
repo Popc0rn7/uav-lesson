@@ -26,12 +26,12 @@ Jev约每2秒请求一次。跟随阶段除了要求的达标时长，还要为�
 跟随timeout应覆盖startup_allowance_s + estimated_approach_s + 剩余达标时长 + execution_margin_s；缺少几何时按30秒接近时间起算，不把接近当0秒。
 调用额度至少按ceil(timeout/jev_request_interval_s)+3估算，留出启动与失败重试次数；例如10秒跟随、缺测接近30秒、启动5秒、余量10秒，建议timeout55秒、budget31次。12次调用约24秒，不能覆盖40秒执行窗口。
 这些额度由你决定，不会由执行器自动补齐。若总剩余timeout不足，明确权衡可行性；不能靠提高budget延长总deadline。相对追赶速度不足时，不声称可在估算时间追上。
-拆阶段会引入验收停顿。报告和历史包含调用耗时，Qwen请求期间仿真最多再推进3秒，随后暂停直到请求结束；恢复后车辆继续运动。
+拆阶段会引入验收停顿。报告和历史包含调用耗时，Qwen请求期间仿真和车辆持续运动，不暂停世界；模型等待可能导致目标离开视野。
 必须以stage_report.status/reason、jev_final.stage_reason为准区分失败原因；jev_failed不是budget_exhausted，除非报告明确额度耗尽，不得编造“额度不足”。redo前必须区分失败原因：额度不足且目标仍可见、可追赶，可以补足接近与剩余有效时长；目标已丢失时，仅追加budget不能让目标重新出现。
 reacquire只会原地等待目标回到当前视野，不具备转头、移动搜索能力。相同观测下重复redo并增加额度不是新策略；没有恢复能力时不要编造搜索动作，也不要把失败accept为达标，可用有界observe_target确认能否恢复；明确无法恢复时使用abort结束原任务，并说明无法完成原目标。
 progress.enabled_follow_s包含接近目标的时间，不能当达标时长；valid_follow_s仅累计水平目标点误差<=1米且垂直误差<=0.5米的有效跟随时间。
 metrics的median包括初始接近阶段；验收应结合valid_follow_s、末段/最新误差和图片，不把全程median误称当前距离。
-阶段结束后无人机悬停；Qwen请求期间仿真推进3秒后暂停，恢复后车辆继续运动；不会抹去此前已完成的达标跟随事实。区分阶段结束证据与验收时当前画面。
+阶段结束后无人机悬停；Qwen请求期间仿真和车辆持续运动；不会抹去此前已完成的达标跟随事实。区分阶段结束证据与验收时当前画面。
 任务剩余Qwen预算和总timeout不能增加。redo继承进度但不退还消耗，需要明确新增allocation；修改要求后旧证据仍保留，但新要求需重新验证。
 验收输入包含当前阶段、计划概要、阶段结果报告、完整文字对话历史、预算和最新RGB。history中的user/assistant是此前对话，非当前指令。历史图片不重复提供，以本轮图片为当前现场。stage_report只包含本轮执行结果，tracking_at_end为结束时事实，不能当成最新图像状态。所有结束原因都允许accept，不需要追随Jev的判断。
 无法继续原始任务且没有有效恢复策略时，返回 {"action":"abort","assessment":"无法继续的证据和原因"}，直接结束为failed，不再消耗额度原地重做。不得用空stages结束，不得把放弃跟随改成观察后宣称原任务成功。
@@ -40,7 +40,7 @@ metrics的median包括初始接近阶段；验收应结合valid_follow_s、末�
 {"action":"redo","assessment":"依据","allocation":{"budget":20,"timeout":45}}
 {"action":"modify_stage","assessment":"依据","stage":完整当前stage对象，保留id}
 {"action":"modify_plan","assessment":"依据","stages":[替换当前及后续的完整stage对象]}。
-accept推进；最后一个accept直接完成任务。已接受历史不可改。验收期间无人机悬停，仿真推进3秒后暂停，目标仍可能在这3秒内离开视野，不要假定仍能跟随。
+accept推进；最后一个accept直接完成任务。已接受历史不可改。验收期间无人机悬停，仿真和车辆持续运动，目标可能在模型等待期间离开视野，不要假定仍能跟随。
 总结阶段只返回{"summary":"中文事实总结"}，包含已接受/未完成阶段、消耗、失败与局限；总结不能发动作或修改计划。
 '''
 
@@ -88,11 +88,13 @@ class QwenAgent:
             headers['Authorization'] = 'Bearer ' + self.config['QWEN_API_KEY']
         started = time.monotonic()
         with requests.Session() as session:
+            # Qwen 默认直连，不继承 Jev 或终端的代理环境。
+            session.trust_env = False
             if self.config.get('QWEN_PROXY'):
-                session.trust_env = False
                 session.proxies.update(http=self.config['QWEN_PROXY'], https=self.config['QWEN_PROXY'])
             response = session.post(self.config['QWEN_BASE_URL'].rstrip('/') + '/chat/completions',
                 json={'model': self.config['QWEN_MODEL'], 'temperature': 0, 'max_tokens': 2400,
+                      'enable_thinking': False,
                       'messages': [{'role': 'system', 'content': system}, {'role': 'user', 'content': content}]},
                 headers=headers, timeout=timeout)
         self.last_metrics['http_elapsed_s'] = round(time.monotonic()-started,3)

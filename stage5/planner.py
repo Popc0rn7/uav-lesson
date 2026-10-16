@@ -59,11 +59,13 @@ def generate(config,task,image,seconds):
     headers={'Content-Type':'application/json'}
     if config.get('QWEN_API_KEY'):headers['Authorization']='Bearer '+config['QWEN_API_KEY']
     with requests.Session() as session:
+        # Qwen 默认直连；Jev 的代理由其自身配置管理。
+        session.trust_env=False
         if config.get('QWEN_PROXY'):
-            session.trust_env=False
             session.proxies.update(http=config['QWEN_PROXY'],https=config['QWEN_PROXY'])
         response=session.post(base+'/chat/completions',json=dict(model=model,temperature=0,
-            max_tokens=1500,messages=[{'role':'system','content':SYSTEM},{'role':'user','content':content}]),
+            max_tokens=1500,enable_thinking=False,
+            messages=[{'role':'system','content':SYSTEM},{'role':'user','content':content}]),
             headers=headers,timeout=float(config.get('QWEN_TIMEOUT','60')))
     if not response.ok:raise RuntimeError(f'Qwen 规划请求失败 HTTP={response.status_code}；未启动飞行任务')
     try:

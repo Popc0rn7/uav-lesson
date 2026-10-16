@@ -39,8 +39,11 @@ class PlannerTests(unittest.TestCase):
         with patch('planner.requests.Session',return_value=session):
             result=generate({'QWEN_BASE_URL':'http://localhost:9999/v1','QWEN_MODEL':'test-vlm'},'跟随红车',b'PNG',5)
         self.assertEqual(result,plan())
+        self.assertIs(session.__enter__.return_value.trust_env, False)
+        session.__enter__.return_value.proxies.update.assert_not_called()
         args=session.__enter__.return_value.post.call_args
         self.assertEqual(args.args[0],'http://localhost:9999/v1/chat/completions')
+        self.assertIs(args.kwargs['json']['enable_thinking'], False)
         self.assertTrue(args.kwargs['json']['messages'][1]['content'][1]['image_url']['url'].startswith('data:image/png;base64,'))
 
     def test_requires_explicit_model_configuration(self):

@@ -257,7 +257,9 @@ QWEN_TIMEOUT=120
 QWEN_SUMMARY_TIMEOUT=30
 ```
 
-换服务时核对模型名与鉴权。BASE_URL会追加 `/chat/completions`；可用 QWEN_PROXY 显式指定代理。板端 HTTP 正常但 PC 连接被拒绝时，按 Stage 1 文档核对显式目标的 HDC 转发，不能据此重启模型。示例设备需 PC18080→RoboPi8080，`/health` 应 ready、vision_enabled=true。
+Qwen 请求显式发送 `enable_thinking=false`，关闭思考模式，适用于规划、阶段验收、总结及独立 planner；切换服务时需确认该参数兼容。云端响应耗时与飞行任务效果需分别验证。
+
+换服务时核对模型名与鉴权。BASE_URL会追加 `/chat/completions`；Qwen 默认直连，不继承终端的 HTTP(S)_PROXY/ALL_PROXY，也不使用 JEV_PROXY。只有显式设置 QWEN_PROXY 才走代理；云端直连时保持该项为空，并确认终端没有同名覆盖。Jev 仍可独立使用 JEV_PROXY。板端 HTTP 正常但 PC 连接被拒绝时，按 Stage 1 文档核对显式目标的 HDC 转发，不能据此重启模型。示例设备需 PC18080→RoboPi8080，`/health` 应 ready、vision_enabled=true。
 
 在 **PC，仓库根目录** 运行：
 
@@ -270,7 +272,7 @@ uv run stage5/scene.py mission --budget 10 --timeout 300 --seconds 60 \
 
 需要重建独立试验初态时，按前文 down/up 重建本任务场景，再 verify-camera、takeoff、camera、view。运行器不会为 redo 或 modify 自动复位飞机/车辆；这些操作从当前现场继续。若现场仍满足悬停、视野和服务条件，也可直接重复mission；完整重建用于需要固定初态的独立试验。不要同时启动直接follow或另一个mission，本机同一进程锁会拒绝争用。
 
-预期：Qwen返回 version=2 的多阶段计划；终端出现 `STAGE START <id> attempt=... allocation=...`。Jev只判断 running/done/failed；有效跟随时间只累计估计水平误差≤1m、垂直误差≤0.5m的时段，接近时间另计enabled_follow_s。阶段结束后无人机悬停；Qwen请求期间仿真最多继续推进约3秒，然后暂停直到返回。Qwen依据精简报告、完整文字历史和最新RGB返回 accept、redo、modify_stage、modify_plan 或 abort。全部阶段被accept才出现TASK completed；失败或耗尽额度出现TASK failed。Qwen可能接受Jev的失败结果，是否真达成任务仍需检查证据，不能仅看completed字样。
+预期：Qwen返回 version=2 的多阶段计划；终端出现 `STAGE START <id> attempt=... allocation=...`。Jev只判断 running/done/failed；有效跟随时间只累计估计水平误差≤1m、垂直误差≤0.5m的时段，接近时间另计enabled_follow_s。阶段结束后无人机悬停；Qwen请求期间仿真和车辆持续运动，无人机保持悬停，不自动暂停世界。Qwen依据精简报告、完整文字历史和最新RGB返回 accept、redo、modify_stage、modify_plan 或 abort。全部阶段被accept才出现TASK completed；失败或耗尽额度出现TASK failed。Qwen可能接受Jev的失败结果，是否真达成任务仍需检查证据，不能仅看completed字样。
 
 当前技能只有 observe_target（原地观察确认红色车辆）、follow_red_vehicle（红车后上方跟随）。没有主动转向搜索、换观察点、绕障或通用目标跟踪；验收等待期间车可能离开视野，此时停止移动并将空候选、丢失时长和超量程等观测交给模型，不能假定仍能跟随。已知飞行边界和失联保护始终由执行层约束。
 
@@ -324,9 +326,9 @@ uv run stage5/scene.py mission \
 
 Qwen 顶部增加最近一次已完成请求的输入/输出 token 与历史轮数（请求进行中继续显示上次完成值）。实际请求文本与 API 用量分别在 `qwen-N-request.json`、`qwen-N-metrics.json`；本地 `qwen-N-input.json` 是完整诊断上下文，不等于线上传输内容。精简报告与完整文字历史的真实重跑记录见 [Validation](Validation.md#精简报告完整-qwen-文字历史重跑2026-10-15)：首次验收5.668s，但跟随未达标，最终abort；不要把耗时改善当作飞行任务验收通过。
 
-mission 的 Qwen 等待现在默认采用仿真3秒窗口：每次请求允许仿真推进约3秒，超出后自动暂停 Gazebo，返回后恢复。灯箱显示“仿真已暂停”，此时相机画面停止更新是预期现象；总任务超时仍按墙钟计时，不会因暂停自动延长。执行阶段正常运行，不暂停 Jev 判断或飞控控制。暂停/恢复失败会终止任务并保留事件。
+mission 在 Qwen 规划、验收、总结及重试期间保持仿真连续运行，不再使用3秒后暂停策略。无人机等待时保持悬停，车辆继续运动，目标可能离开视野；模型提示词与额度建议已同步该事实。总任务超时仍按墙钟计时。云端 Qwen 已关闭思考，连续仿真的完整飞行效果仍待验收。
 
-正常 Ctrl+C 会走恢复流程；若进程被强制结束导致暂停遗留，PC 可先检查对应 mission 已结束，再执行以下恢复命令：
+以下恢复命令仅用于历史版本或外部操作遗留的暂停；先确认没有正在运行的 mission：
 
 ```bash
 docker exec uav-stage5-gazebo gz service \
@@ -336,6 +338,6 @@ docker exec uav-stage5-gazebo gz service \
 
 成功响应包含 `data: true`，随后相机 sim_time 应重新增长。仅适用于当前 Stage 5 世界，不对其他场景发送控制。
 
-当前3秒等待策略已完成一次真实任务验证：观察＋跟随10秒两个阶段一次通过，累计有效跟随11.458s；真值达标区间水平8.062m、上方2.148m，仍有1.489m横向偏差。详情见 [Validation](Validation.md#qwen-3秒仿真窗口执行一致性验证2026-10-15)。暂停策略和协议测试通过不等于实机或通用跟踪能力验收。
+历史3秒等待策略曾完成一次真实任务验证（不代表当前连续仿真配置通过）：观察＋跟随10秒两个阶段一次通过，累计有效跟随11.458s；真值达标区间水平8.062m、上方2.148m，仍有1.489m横向偏差。详情见 [Validation](Validation.md#qwen-3秒仿真窗口执行一致性验证2026-10-15)。暂停策略和协议测试通过不等于实机或通用跟踪能力验收。
 
 灯箱自动跟随使用 `/tmp/uav-stage5-<工作树标识>-latest.json`，只记录任务目录和工作树路径，不含凭据。mission 启动时更新索引；灯箱刷新时重新选择，切换会清除旧画面。升级前已运行的默认 `/tmp/stage5-mission-*` 任务可自动发现；历史自定义目录仍可用 `--run` 固定查看。页面 `RUN` 行会标记“自动跟随”。

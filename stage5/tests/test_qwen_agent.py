@@ -18,6 +18,9 @@ class QwenTests(unittest.TestCase):
         system=session.__enter__.return_value.post.call_args.kwargs['json']['messages'][0]['content']
         self.assertIn('不能验收',system)
         self.assertNotIn('modify_stage',system)
+        self.assertIs(session.__enter__.return_value.post.call_args.kwargs['json']['enable_thinking'], False)
+        self.assertIs(session.__enter__.return_value.trust_env, False)
+        session.__enter__.return_value.proxies.update.assert_not_called()
 
     def test_http_failure_does_not_expose_body_or_headers(self):
         session=MagicMock();response=session.__enter__.return_value.post.return_value

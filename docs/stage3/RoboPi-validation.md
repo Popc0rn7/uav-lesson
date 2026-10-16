@@ -278,3 +278,9 @@ forest10-ab 同样共用 super_px4.py，原本有任务包络、参考速度/加
 验证：Python 语法检查通过；host 79 项测试中 76 通过、3 项 ROS 环境跳过；隔离 Humble Docker 的 4 项 ROS 测试全部通过。使用真实 PositionCommand 对两个 AB 配置重放 20.00217 m 东向参考，确认继续接受；同时越界、超速、超加速度、偏差 >3 m 时仍接受且记录，切回 land 策略则拒绝；NaN 与过期时间戳仍拒绝。未运行新的仿真飞行，不能据此宣称 AB 完成。
 
 已通过 HDC 发布独立 release `ec249152b59e5aecbeebf1fd35ce423ff533784c9203865dc6391ee2ad4982fe`，保留旧版本。发布前确认上次 Stage 3 的 supervisor/control/lidar/planner/mission 全部未运行。新 release 在实际 OpenHarmony Python/ROS 消息环境重放同一测试通过（两个 AB 配置、仅观察与 land 对照、非有限/过期拒绝），无 ROS 节点启动、无飞行命令；证据 `artifacts/robopi-stage3/ab-guard-check.json`。首次测试工具缺少 app/airsim 导入路径，补齐后通过；未修改板端全局环境。下次 up 使用新 release 和当前任务输入，不复用旧启动快照。
+
+### SUPER 分支整合与 ROS2 模板检查（2026-10-16）
+
+本地 feat/sim 从 61c1d62 快进至 4461128，再快进合入 ca06b3a／71acbdb，与迁移时使用的基线及两次提交一致，没有重复套用远目标裁剪或静止终点保持修复。检查发现迁移适配仅修改活动 CMakeLists.txt，ROS2 模板仍无条件链接 libdw 且缺少栈追踪编译定义／项目头文件优先级；select_ros_version.sh ROS2 会覆盖活动文件。追加 SUPER 提交 3be0d50 同步模板，父仓库维护独立 SUPER-ros2-template.patch，兼容已应用旧补丁的源码。
+
+验证：终点保持 C++ 测试编译执行通过；隔离 ROS 容器中使用现有 A* 回归二进制运行 5 项近目标／裁剪目标／10-ab 方向／规划范围用例全部通过。本次没有重编该二进制，不将其作为新编译证据。从 4461128 和 71acbdb 两种归档基线调用实际 prepare_source，再执行 ROS2 选择脚本，源码与预期一致、活动 CMake 不丢失适配；新增模板与活动构建文件逐字节相同。未新增飞行或板端部署。

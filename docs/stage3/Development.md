@@ -1,5 +1,7 @@
 # Stage 3 开发交接
 
+首次接触本仓库，先读 [从上游复现到 RoboPi 的开发路线](../../develop/README.md)，再按所在阶段进入操作文档。
+
 换机继续 AirSim＋RoboPi 迁移验证，先读 [RoboPi 迁移交接](RoboPi-handoff.md)。
 
 当前标准主线为 AirSim 宿主机场景＋PX4 Docker＋ROS/SUPER Docker（PX4/GNSS，无 LIO）。Docker 2 的板端替代入口已开始实现：PC 仅保留一个 PX4/Agent/时钟/原始雷达容器，RoboPi 原生运行控制、配准、地图、规划与航点节点；构建部署与无显示测试见 [AirSim README](../../stage3/super/airsim/README.md#robopi-算力后端2026-10-16迁移验证中)。本轮已完成目标交叉构建、板端加载/消息序列化、单容器镜像与无显示 PC 短程/forest1/forest10 基线，板端 1 m/s 短程及 forest1 往返已通过，低速四项故障降落已通过；forest10 首轮因指令超时降落，三次成功冷启动待完成；实际结果见 [迁移验证](RoboPi-validation.md)。下文保留 Gazebo 路线的历史边界。

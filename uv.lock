@@ -1369,6 +1369,11 @@ stage2 = [
     { name = "numpy" },
     { name = "pillow" },
 ]
+stage4 = [
+    { name = "numpy" },
+    { name = "pillow" },
+    { name = "pyulog" },
+]
 stage5 = [
     { name = "numpy" },
     { name = "pymavlink" },
@@ -1383,17 +1388,20 @@ requires-dist = [
     { name = "msgpack", specifier = ">=1.1,<2" },
     { name = "numpy", marker = "extra == 'flight-review'", specifier = ">=1.26,<3" },
     { name = "numpy", marker = "extra == 'stage2'", specifier = ">=2.5.3" },
+    { name = "numpy", marker = "extra == 'stage4'", specifier = ">=1.26,<3" },
     { name = "numpy", marker = "extra == 'stage5'", specifier = ">=2.5.3" },
     { name = "pillow", marker = "extra == 'stage2'", specifier = ">=12.3.0" },
+    { name = "pillow", marker = "extra == 'stage4'", specifier = ">=12.3.0" },
     { name = "pymavlink", marker = "extra == 'flight-review'", specifier = ">=2.4.50,<3" },
     { name = "pymavlink", marker = "extra == 'stage5'", specifier = ">=2.4.49,<3" },
     { name = "pyulog", marker = "extra == 'flight-review'", specifier = ">=1.2,<2" },
+    { name = "pyulog", marker = "extra == 'stage4'", specifier = ">=1.2,<2" },
     { name = "pyyaml", specifier = ">=6,<7" },
     { name = "requests", specifier = ">=2.34.2" },
     { name = "socksio", marker = "extra == 'stage5'", specifier = ">=1,<2" },
     { name = "typesafe-sdk", marker = "extra == 'stage5'", specifier = ">=0.7,<1" },
 ]
-provides-extras = ["flight-review", "stage5", "stage2"]
+provides-extras = ["stage4", "flight-review", "stage5", "stage2"]
 
 [[package]]
 name = "urllib3"

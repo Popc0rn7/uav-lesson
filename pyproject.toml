@@ -12,6 +12,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+stage4 = ["numpy>=1.26,<3", "pillow>=12.3.0", "pyulog>=1.2,<2"]
 flight-review = [
     "pymavlink>=2.4.50,<3",
     "pyulog>=1.2,<2",

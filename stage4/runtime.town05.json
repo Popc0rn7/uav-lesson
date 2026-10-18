@@ -1,0 +1,12 @@
+{
+  "scene_dir": "../../AeroVLA/envs/carla_town_envs/Town05/LinuxNoEditor",
+  "binary": "CarlaUE4/Binaries/Linux/CarlaUE4",
+  "scene_args": ["CarlaUE4", "-vulkan", "-windowed", "-ResX=960", "-ResY=540", "-nosound", "-norhithread"],
+  "settings": "settings.json",
+  "image": "px4io/px4-sitl-gazebo:latest",
+  "ros_image": "uav-stage4-ros:local",
+  "container": "uav-stage4-px4",
+  "ros_container": "uav-stage4-ros",
+  "startup_timeout_s": 180,
+  "task_file": "../artifacts/stage4/task.json"
+}

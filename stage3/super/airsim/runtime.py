@@ -488,7 +488,7 @@ def shutdown(state, directory, force=False):
 
 
 
-def capture_provenance(config):
+def capture_provenance(config, *, include_super=True):
     def git(path, *args):
         return command('git','-C',path,*args).stdout.strip()
     def digest(path):
@@ -496,18 +496,31 @@ def capture_provenance(config):
             return hashlib.file_digest(stream,'sha256').hexdigest()
     files = [*HERE.glob('*.py'), *HERE.glob('*.sh'), HERE.parent/'super_px4.py']
     images = [config['image']]
-    if config.get('super_task') and config.get('compute','docker') == 'docker':
+    if (config.get('super_task') or not include_super) and config.get('compute','docker') == 'docker':
         images.append(config['ros_image'])
     return dict(repository=git(ROOT,'rev-parse','HEAD'),
                 working_tree=git(ROOT,'status','--short'),
-                super_commit=git(ROOT/'submodules/SUPER','rev-parse','HEAD'),
-                super_patch_sha256=hashlib.sha256(command('git','-C',ROOT/'submodules/SUPER','diff','HEAD').stdout.encode()).hexdigest(),
+                super_commit=git(ROOT/'submodules/SUPER','rev-parse','HEAD') if include_super else None,
+                super_patch_sha256=(hashlib.sha256(command('git','-C',ROOT/'submodules/SUPER','diff','HEAD').stdout.encode()).hexdigest()
+                                    if include_super else None),
                 sources={str(p.relative_to(ROOT)):digest(p) for p in files},
                 scene_sha256=digest(Path(config['binary'])),
                 images={image:json.loads(command('docker','image','inspect',image).stdout)[0]['Id'] for image in images})
 
 
-def up(config, directory, *, ros_entrypoint=None, ros_check=None):
+def scene_startup_error(run_dir):
+    path = Path(run_dir) / 'airsim-console.log'
+    tail = path.read_bytes()[-16384:].decode('utf-8', errors='replace') if path.exists() else ''
+    if ('SIGSEGV' in tail or 'Signal=11' in tail) and 'Vulkan' in tail:
+        reason = 'AirSim 场景在 Vulkan 渲染中崩溃（SIGSEGV），HIL 数据已中断'
+    else:
+        reason = 'AirSim 场景已退出或进程身份无法核实'
+    return RuntimeError(f'{reason}；查看 {path}（PX4 日志见同目录 px4-console.log）')
+
+
+def up(config, directory, *, ros_entrypoint=None, ros_check=None, ros_runtime=None):
+    # Optional non-SUPER ROS workload. Existing callers retain the original path.
+    ros_mode = bool(config.get('super_task') or ros_runtime)
     if config.get('planner_timing','baseline') != 'baseline' and config.get('compute','docker') != 'robopi':
         raise ValueError('planner_timing 实验档仅用于显式 RoboPi 后端，不能在 Docker 基线中静默忽略')
     if config.get('diagnostics') and ros_entrypoint is None:
@@ -521,7 +534,9 @@ def up(config, directory, *, ros_entrypoint=None, ros_check=None):
     if config.get('super_task'):
         from task_config import load_task
         task = load_task(config['super_task'])
-    settings = runtime_settings(config, task)
+    if ros_runtime:
+        task = ros_runtime['task']
+    settings = ros_runtime['settings'] if ros_runtime else runtime_settings(config, task)
     inputs = [config, settings] + ([task] if task is not None else [])
     fingerprint = hashlib.sha256(json.dumps(inputs, sort_keys=True).encode()).hexdigest()
     state_file = directory / "state.json"
@@ -551,12 +566,12 @@ def up(config, directory, *, ros_entrypoint=None, ros_check=None):
         # initialize() verifies the target/release before creating any board run.
         board_backend.selected(config['target'])
         board_backend.network_preflight(config['target'],config['pc_address'],config['board_address'])
-    if config.get('super_task'):
+    if ros_mode:
         if not board_mode:
             command('docker', 'image', 'inspect', config['ros_image'])
         if inspect_container(config['ros_container']):
             raise RuntimeError('同名算法容器已存在，拒绝接管')
-        if not (ROOT / 'thirdparty/super_gazebo_ws/install/local_setup.bash').is_file():
+        if not ros_runtime and not (ROOT / 'thirdparty/super_gazebo_ws/install/local_setup.bash').is_file():
             raise RuntimeError('SUPER 尚未编译；先执行 super_docker.py prepare / build')
         check_port(socket.SOCK_DGRAM, 8888)
     if inspect_container(config["container"]):
@@ -565,14 +580,17 @@ def up(config, directory, *, ros_entrypoint=None, ros_check=None):
     owner = uuid.uuid4().hex
     run_dir = directory / owner
     run_dir.mkdir()
+    if ros_runtime:
+        (run_dir / 'run-id').write_text(owner)
     (run_dir / "px4-logs").mkdir()
-    (run_dir/'inputs-evidence.json').write_text(json.dumps(capture_provenance(config),indent=2))
+    (run_dir/'inputs-evidence.json').write_text(json.dumps(
+        capture_provenance(config, include_super=False) if ros_runtime else capture_provenance(config),indent=2))
     settings_path = run_dir / "settings.json"
     settings_path.write_text(json.dumps(settings, indent=2))
     state = dict(owner=owner, fingerprint=fingerprint, container=config["container"],
                  binary=str(binary), runtime_settings=str(settings_path), run_dir=str(run_dir),
                  config=config, phase="starting", container_id=None)
-    if config.get('super_task'):
+    if ros_mode:
         (run_dir / 'task.json').write_text(json.dumps(task, indent=2))
         if not board_mode:
             state.update(ros_container=config['ros_container'], ros_container_id=None)
@@ -616,7 +634,7 @@ def up(config, directory, *, ros_entrypoint=None, ros_check=None):
                          "--network", "host", "--label", f"{LABEL}={owner}",
                          "--mount", f"type=bind,source={HERE},target=/lesson-airsim,readonly",
                          "--mount", f"type=bind,source={run_dir}/px4-logs,target=/flight-logs",
-                         '-e', f'AIRSIM_SUPER={int(bool(config.get("super_task")))}',
+                         '-e', f'AIRSIM_SUPER={int(ros_mode)}',
                          *(['-e', 'FASTRTPS_DEFAULT_PROFILES_FILE=/run/airsim/dds-pc.xml',
                             '--mount', f'type=bind,source={ROOT},target=/lesson,readonly',
                             '--mount', f'type=bind,source={ROOT}/thirdparty/super_gazebo_ws,target=/super_ws,readonly',
@@ -626,20 +644,26 @@ def up(config, directory, *, ros_entrypoint=None, ros_check=None):
         state["container_id"] = result.stdout.strip()
         write_state(directory, state)
         while True:
+            if not host_alive(state):
+                raise scene_startup_error(run_dir)
             try:
+                if ros_runtime and ros_runtime.get('prepare_px4'):
+                    ros_runtime['prepare_px4'](state)
                 if ready(state):
                     break
             except subprocess.TimeoutExpired:
                 pass
-            if not host_alive(state) or time.monotonic() > deadline:
-                raise RuntimeError("PX4 未就绪；查看本次运行日志")
+            if not host_alive(state):
+                raise scene_startup_error(run_dir)
+            if time.monotonic() > deadline:
+                raise RuntimeError(f"PX4 就绪等待超时；查看 {run_dir}/px4-console.log 和 airsim-console.log")
             time.sleep(1)
         if board_mode:
             board_backend.start(state)
             result = ros_action(state, 'inspect', check=False)
             (run_dir / 'startup-inspect.log').write_text(result.stdout + result.stderr)
             result.check_returncode()
-        elif config.get('super_task'):
+        elif ros_mode:
             gui = []
             if Path('/tmp/.X11-unix').is_dir():
                 gui.extend(['--mount', 'type=bind,source=/tmp/.X11-unix,target=/tmp/.X11-unix,readonly'])
@@ -652,11 +676,13 @@ def up(config, directory, *, ros_entrypoint=None, ros_check=None):
             result = command('docker', 'run', '-d', '--init', '--name', config['ros_container'],
                              '--network', 'host', '--label', f'{LABEL}={owner}',
                              '--mount', f'type=bind,source={ROOT},target=/lesson,readonly',
-                             '--mount', f'type=bind,source={ROOT}/thirdparty/super_gazebo_ws,target=/super_ws,readonly',
-                             '--mount', f'type=bind,source={ROOT}/submodules/SUPER,target=/super_ws/src,readonly',
+                             *([] if ros_runtime else [
+                                 '--mount', f'type=bind,source={ROOT}/thirdparty/super_gazebo_ws,target=/super_ws,readonly',
+                                 '--mount', f'type=bind,source={ROOT}/submodules/SUPER,target=/super_ws/src,readonly']),
                              '--mount', f'type=bind,source={run_dir},target=/run/airsim',
                              '-e', 'FASTRTPS_DEFAULT_PROFILES_FILE=/lesson/stage3/super/race_view_dds.xml',
-                             *gui,
+                             *gui, *([x for key in ros_runtime.get('env', []) if key in os.environ
+                                      for x in ('-e', key)] if ros_runtime else []),
                              config['ros_image'], 'bash', ros_entrypoint or '/lesson/stage3/super/airsim/run_nodes.sh', timeout=30)
             state['ros_container_id'] = result.stdout.strip()
             write_state(directory, state)

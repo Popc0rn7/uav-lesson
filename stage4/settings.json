@@ -1,0 +1,128 @@
+{
+  "SettingsVersion": 1.2,
+  "SimMode": "Multirotor",
+  "ClockType": "SteppableClock",
+  "ClockSpeed": 1,
+  "ViewMode": "FlyWithMe",
+  "Vehicles": {
+    "PX4": {
+      "VehicleType": "PX4Multirotor",
+      "Parameters": {
+        "SENS_GPS0_DELAY": 200,
+        "MC_REF_FF": 1.0,
+        "MPC_ACC_HOR": 4.0,
+        "MPC_ACC_HOR_MAX": 4.0
+      },
+      "Sensors": {
+        "gps": {
+          "SensorType": 3,
+          "Enabled": true,
+          "UpdateLatency": 0.2
+        },
+        "Barometer": {
+          "SensorType": 1,
+          "Enabled": true,
+          "PressureFactorSigma": 0.0001825
+        }
+      },
+      "Cameras": {
+        "FrontCamera": {
+          "X": 1,
+          "Y": 0,
+          "Z": 0,
+          "Pitch": 0,
+          "Roll": 0,
+          "Yaw": 0,
+          "CaptureSettings": [
+            {
+              "ImageType": 0,
+              "Width": 256,
+              "Height": 256,
+              "FOV_Degrees": 90,
+              "AutoExposureMaxBrightness": 1,
+              "AutoExposureMinBrightness": 0.03
+            },
+            {
+              "ImageType": 2,
+              "Width": 256,
+              "Height": 256,
+              "FOV_Degrees": 90
+            }
+          ]
+        },
+        "DownCamera": {
+          "X": 0,
+          "Y": 0,
+          "Z": 0,
+          "Pitch": -90,
+          "Roll": 0,
+          "Yaw": 0,
+          "CaptureSettings": [
+            {
+              "ImageType": 0,
+              "Width": 256,
+              "Height": 256,
+              "FOV_Degrees": 90,
+              "AutoExposureMaxBrightness": 1,
+              "AutoExposureMinBrightness": 0.03
+            },
+            {
+              "ImageType": 2,
+              "Width": 256,
+              "Height": 256,
+              "FOV_Degrees": 90
+            }
+          ]
+        },
+        "LeftCamera": {
+          "X": 0,
+          "Y": 0,
+          "Z": 0,
+          "Pitch": 0,
+          "Roll": 0,
+          "Yaw": -90,
+          "CaptureSettings": [
+            {
+              "ImageType": 2,
+              "Width": 256,
+              "Height": 256,
+              "FOV_Degrees": 90
+            }
+          ]
+        },
+        "RightCamera": {
+          "X": 0,
+          "Y": 0,
+          "Z": 0,
+          "Pitch": 0,
+          "Roll": 0,
+          "Yaw": 90,
+          "CaptureSettings": [
+            {
+              "ImageType": 2,
+              "Width": 256,
+              "Height": 256,
+              "FOV_Degrees": 90
+            }
+          ]
+        },
+        "RearCamera": {
+          "X": 0,
+          "Y": 0,
+          "Z": 0,
+          "Pitch": 0,
+          "Roll": 0,
+          "Yaw": 180,
+          "CaptureSettings": [
+            {
+              "ImageType": 2,
+              "Width": 256,
+              "Height": 256,
+              "FOV_Degrees": 90
+            }
+          ]
+        }
+      }
+    }
+  }
+}

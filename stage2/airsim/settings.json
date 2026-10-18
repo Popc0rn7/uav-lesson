@@ -1,0 +1,70 @@
+{
+  "SettingsVersion": 1.2,
+  "Default Environment": "Soccer_Field_Easy",
+  "SimMode": "Multirotor",
+  "ClockType": "ScalableClock",
+  "ClockSpeed": 1,
+  "ViewMode": "SpringArmChase",
+  "ApiServerPort": 41451,
+  "RpcEnabled": true,
+  "LocalHostIp": "127.0.0.1",
+  "Vehicles": {
+    "drone_2": {
+      "VehicleType": "SimpleFlight"
+    },
+    "PX4": {
+      "VehicleType": "PX4Multirotor",
+      "UseSerial": false,
+      "UseTcp": true,
+      "LockStep": false,
+      "TcpPort": 4560,
+      "LocalHostIp": "127.0.0.1",
+      "UdpIp": "127.0.0.1",
+      "ControlIp": "127.0.0.1",
+      "SitlIp": "127.0.0.1",
+      "SitlPort": 14580,
+      "ControlPort": 14580,
+      "ControlPortLocal": 14540,
+      "ControlPortRemote": 14580,
+      "VehicleSysID": 135,
+      "VehicleCompID": 1,
+      "Sensors": {
+        "Barometer": {
+          "SensorType": 1,
+          "Enabled": true,
+          "PressureFactorSigma": 0.0001825
+        },
+        "imu": {
+          "SensorType": 2,
+          "Enabled": true
+        },
+        "gps": {
+          "SensorType": 3,
+          "Enabled": true
+        },
+        "magnetometer": {
+          "SensorType": 4,
+          "Enabled": true
+        }
+      },
+      "Cameras": {
+        "fpv_cam": {
+          "X": 0.25,
+          "Y": 0,
+          "Z": 0,
+          "Pitch": 0,
+          "Roll": 0,
+          "Yaw": 0,
+          "CaptureSettings": [
+            {
+              "ImageType": 0,
+              "Width": 640,
+              "Height": 480,
+              "FOV_Degrees": 90
+            }
+          ]
+        }
+      }
+    }
+  }
+}

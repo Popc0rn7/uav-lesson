@@ -22,6 +22,8 @@
 
 此阶段暂不使用算力板，在 PC 跑通飞控与仿真链路。
 
+新主线从 Stage 2 统一为 PC AirSim＋Docker 1 PX4；Stage 2 不需要 Docker 2，先直接操作 PX4 验证起降和运动，再接 QGC 手动竞速。后续阶段沿用环境，按算法需要增加 Docker 2 Humble，再迁移到板端。旧 ADRL 的 PX4 基础链路已跑通，原生固定准备区与手动开赛流程已获用户验收；入口、证据和迁移验收顺序见 [AirSim 迁移](stage2/AirSim.md)。以下 Gazebo 内容保留历史实现与验收状态，不能作为 AirSim 迁移完成的依据。
+
 标准机已确定为 `x500_experiment`（Orbbec Gemini 2 RGBD 几何近似＋MID-360S 规则 GPU 扫描近似），后续阶段沿用。PC 启动与 QGC 操作见 [Hands-on](stage2/Hands-on.md)，数据链路、性能和历史证据见 [实测记录](stage2/Validation.md)。当前 Baylands 模型加载与雷达/机体 IMU 数据已验证，用户已确认 RGB、D、雷达点云、表面体素展示可用。改装后的完整飞行、新 PC 复现、复杂场景性能和真实硬件对照仍待验收。
 
 实施顺序：先固定 PX4、Gazebo、QGroundControl 的版本组合，交付单机空场景的启动、连接、起飞、悬停、降落与重置；验收通过后加入一个赛道的检查点与本地计时，再扩展三个赛道、传感器可视化和在线排行榜。JoyCan 在核实来源与连接方式后接入。为 Stage 3 预留单机标识、通信端点、坐标系与单位、仿真时间和状态接口记录；本阶段验收仍在 PC 完成。镜像构建、资源下载与版本核实属于教师课前准备。

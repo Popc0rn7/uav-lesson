@@ -17,15 +17,17 @@ PC 运行 PX4 SITL + Gazebo Docker 仿真，以及 QGroundControl、GUI 和可�
 
 ## 当前可运行内容
 
-统一开发采用“PX4/Gazebo 仿真容器＋ROS 2 Humble 算力容器”，后续由 RoboPi 替代算力容器。模块划分、已有代码映射、实验配置入口与迁移顺序见 [开发框架](develop/README.md)。在 PC 仓库根目录运行 `python3 develop/lesson.py list` 查看已接入实验，`python3 develop/lesson.py up --dry-run` 查看启动命令。
+课程新主线从 Stage 2 使用“PC AirSim＋PX4 仿真容器”，自主算法阶段再增加 ROS 2 Humble 算力容器，后续由 RoboPi 替代算力容器。[Stage 2 AirSim 入口与验证范围](docs/stage2/AirSim.md)记录当前适配。既有 Gazebo 模块、实验配置与迁移工具见 [开发框架](develop/README.md)；该框架尚未接入新的 Stage 2 竞速入口。在 PC 仓库根目录运行 `python3 develop/lesson.py list` 查看已接入实验，`python3 develop/lesson.py up --dry-run` 查看启动命令。
 
 - Stage 1：ROS 常驻模型聊天链路，PC 入口位于 `stage1/`，板端文件位于 `robopi/stage1/`；上游运行产物和模型需课前获取，操作见 [Hands-on](docs/stage1/Hands-on.md)。
-- Stage 2：PC PX4/Gazebo 标准机 `x500_experiment`（Orbbec Gemini 2 RGBD＋MID-360S 几何近似），QGC 操作、四图展示和排障见 [Hands-on](docs/stage2/Hands-on.md)。用户已确认展示可用，改装后的完整飞行仍待验收；历史证据见 [实测记录](docs/stage2/Validation.md)。
+- Stage 2：新的 [AirSim＋单 PX4 Docker 入口](docs/stage2/AirSim.md)直接通过 MAVLink 验证起降和短程往返，Stage 2 不需要 ROS 容器；原生固定准备区与手动开赛流程已获用户验收，完整穿门竞速待验收。既有 Gazebo 标准机 `x500_experiment`、QGC 操作、四图展示和排障保留在 [Hands-on](docs/stage2/Hands-on.md)；历史证据见 [实测记录](docs/stage2/Validation.md)。
 - Stage 3：SUPER 的 Humble Docker 竞速与 PX4/Gazebo demo，含 FAST-LIO2、200 Hz IMU 传播状态和 Gazebo/RViz 双窗口。带墙面标记的 2 m/s 走廊往返已验收；[运行步骤](docs/stage3/Hands-on.md)、[验证与边界](docs/stage3/Validation.md)、[开发交接](docs/stage3/Development.md)。Jev 文本示例保留；板端迁移、统一算法对照、目标识别/追踪和聊天 GUI 尚未完成。
 
 - Stage 5：Qwen分阶段规划与验收、Jev执行、红车RGBD跟随及只读任务灯箱；[架构与关键问题](docs/stage5/Agent.md)、[运行步骤](docs/stage5/Hands-on.md)、[验证记录](docs/stage5/Validation.md)。当前仅为指定街区的PC仿真demo，未验证通用目标、复杂绕障或实机。
 
 ## Stage 2 标准机入口
+
+新的竞速环境使用 [AirSim 入口](docs/stage2/AirSim.md)，从 `uv run stage2/airsim/race.py up` 开始；以下为保留的 Gazebo 展示流程。
 
 教师课前准备镜像、QGC、图形环境及 `uv sync --extra stage2`。在 **PC 仓库根目录**按 [启动步骤](docs/stage2/Hands-on.md#2-学员启动单机仿真pc)运行标准机，两个模型目录必须同时挂载。仿真就绪后，在两个终端执行：
 

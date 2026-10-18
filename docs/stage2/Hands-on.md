@@ -1,5 +1,7 @@
 # Stage 2：标准机仿真、飞行与传感器展示
 
+> 课程正在迁移到从 Stage 2 延续的 AirSim＋PX4 Docker 框架。Stage 2 不需要 Docker 2；先直接操作 PX4 验证基础链路，再接 QGC 手动竞速，Humble/算法容器在后续阶段接入。新入口与验证范围见 [AirSim 迁移](AirSim.md)。本文保留 Gazebo 操作与既有验证范围，不代表新竞速链路已经验收。
+
 目标：在同一台 Linux PC 上启动 PX4 SITL + Gazebo，通过 QGroundControl（QGC）完成起飞、悬停、改变高度、降落与重新开始。链路为 **PC QGC ↔ MAVLink UDP ↔ Docker 内 PX4 ↔ Gazebo**；飞行练习在 PC 完成，不使用 RoboPi/HDC；点云与体素展示使用另一个 ROS Humble Docker。
 
 课程标准机为 **`x500_experiment`：X500＋RGBD＋MID-360S 规则扫描近似**，后续阶段继续使用该机型。用户已确认四图展示可用；改装后的完整飞行和新 PC 复现待验收。实测与历史诊断见 [Validation](Validation.md)，雷达规格和拟合边界见 [MID-360S](MID-360S.md)。

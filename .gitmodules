@@ -5,3 +5,6 @@
 [submodule "submodules/AirSim"]
 	path = submodules/AirSim
 	url = https://github.com/microsoft/AirSim.git
+[submodule "submodules/drone-race"]
+	path = submodules/drone-race
+	url = https://github.com/microsoft/AirSim-Drone-Racing-Lab.git

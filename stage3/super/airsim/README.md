@@ -2,6 +2,8 @@
 
 本入口提供 PC 宿主机 AirSim＋Docker 1 PX4＋Docker 2 ROS 2/SUPER。保留独立 PX4 控制测试模式；不接算力板，不启动 Gazebo。
 
+Stage 4 AeroVLA 复用本目录 runtime 的进程/容器管理、PX4 接入和时钟，通过显式 `ros_runtime` 启动不依赖 SUPER 的 ROS 工作负载；不改变这里的默认任务与参数。Stage 4 操作和验收独立见 [Hands-on](../../../docs/stage4/Hands-on.md)。
+
 ## SUPER 双 Docker 合并入口
 
 ### 失控、碰撞或命令卡住时（PC，另一个终端）

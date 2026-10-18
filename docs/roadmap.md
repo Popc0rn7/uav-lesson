@@ -88,6 +88,16 @@
 Stage 3 当前收束点：MID-360 视场与时间分片扫描近似、FAST-LIO2 的 30 Hz 配准点云及约 200 Hz IMU 传播状态已在本机跑通；带可选墙面立体标记的 2 m/s 往返通过，GNSS 融合关闭，飞控保留气压降落后备。原赛道纯 LIO、LIO 5 档、实机精确时序/标定、多轮成功率及 RoboPi 迁移仍待验证。旧配置证据独立保留；后续分工见 [开发交接](stage3/Development.md)。
 
 
+## Stage 4：AeroVLA API 语义导航
+
+采用 Town05＋AirSim＋PX4 Docker＋ROS 算法 Docker，外部 AeroVLA 服务提供无会话推理。课程侧使用轻量 uv 环境，模型依赖留在旧仓库。入口与边界见 [Hands-on](stage4/Hands-on.md)，实际证据见 [Validation](stage4/Validation.md)。
+
+- [x] Town05 相机／估计／时钟、低速固定动作、真实模型单步；任务 0 一次完整闭环通过：78 次模型请求，约 15.08 分钟，停止时估计目标距离 3.72 m，已降落并 Disarmed。多轮成功率另行验证。
+- [x] API 超时、迟到响应取消、相机失流、控制进程退出的实际降落与 Disarmed 验收。
+- [x] PC 只读 WebUI：与源 UI 对齐的模型观测双图/位姿/动作、飞行状态、速度与推理耗时；5 m/s、8 m/s²、稳定 0.15 秒的六次真实模型短程请求步骤中位数约 3.80 秒、实际峰值 4.80 m/s，已降落并 Disarmed；当前默认改为 8 m/s、4 m/s²，因 Stage 2 占用端口尚未实飞。
+- [ ] 多轮稳定性与其他任务/地图验收。
+- [ ] RoboPi 原生迁移。
+
 ## Stage 5 扩展：语义目标跟随
 
 - [x] 独立 Gazebo 街区与可启动/停止/复位的红色方块车。

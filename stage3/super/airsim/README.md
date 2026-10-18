@@ -4,6 +4,8 @@
 
 Stage 4 AeroVLA 复用本目录 runtime 的进程/容器管理、PX4 接入和时钟，通过显式 `ros_runtime` 启动不依赖 SUPER 的 ROS 工作负载；不改变这里的默认任务与参数。Stage 4 操作和验收独立见 [Hands-on](../../../docs/stage4/Hands-on.md)。
 
+宿主机启动统一关闭 Unreal 的启动鼠标捕获与窗口锁鼠：runtime 注入 `-NoMouseCapture` 和 Input 的 NoCapture / DoNotLock 设置，便于在场景、QGC 与终端之间操作；不修改原包配置。该默认也用于 Stage 2 ADRL。Stage 3 场景的实际桌面效果须按当前包验证。
+
 ## SUPER 双 Docker 合并入口
 
 ### 失控、碰撞或命令卡住时（PC，另一个终端）

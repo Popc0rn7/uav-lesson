@@ -66,9 +66,13 @@ class RuntimeTests(unittest.TestCase):
                  patch.object(host,'listen_owned',return_value=True), \
                  patch.object(host,'ready',return_value=True), \
                  patch.object(host,'host_alive',return_value=True), \
-                 patch.object(host.subprocess,'Popen',return_value=Process()):
+                 patch.object(host.subprocess,'Popen',return_value=Process()) as scene_process:
                 host.up(config,directory,ros_entrypoint='/lesson/stage4/run_nodes.sh',
                         ros_check=lambda state:subprocess.CompletedProcess([],0,'ready',''),ros_runtime=workload)
+            self.assertEqual(scene_process.call_count,1)
+            scene_args=scene_process.call_args.args[0]
+            for argument in host.AIRSIM_INPUT_ARGS:
+                self.assertEqual(scene_args.count(argument),1)
             state=json.loads((directory/'state.json').read_text())
             self.assertEqual(state['phase'],'ready')
             run_dir=Path(state['run_dir'])

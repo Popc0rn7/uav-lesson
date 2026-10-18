@@ -257,6 +257,12 @@ def check_ports():
             check_port(kind, port)
 
 
+AIRSIM_INPUT_ARGS = [
+    '-ini:Input:[/Script/Engine.InputSettings]:bCaptureMouseOnLaunch=False,DefaultViewportMouseCaptureMode=NoCapture,bDefaultViewportMouseLock=False,DefaultViewportMouseLockMode=DoNotLock',
+    '-NoMouseCapture',
+]
+
+
 def runtime_settings(config, task=None):
     settings = json.loads(Path(config["settings"]).read_text())
     vehicles = settings.get("Vehicles", {})
@@ -614,7 +620,7 @@ def up(config, directory, *, ros_entrypoint=None, ros_check=None, ros_runtime=No
             if '-RenderOffScreen' not in scene_args:
                 scene_args.append('-RenderOffScreen')
         with (run_dir / 'airsim-console.log').open('w') as log:
-            process = subprocess.Popen([str(binary), *scene_args, f'-settings={settings_path}'],
+            process = subprocess.Popen([str(binary), *scene_args, *AIRSIM_INPUT_ARGS, f'-settings={settings_path}'],
                                        cwd=config['scene_dir'], stdout=log, stderr=subprocess.STDOUT,
                                        start_new_session=True, env=scene_env)
         state.update(pid=process.pid, start_ticks=start_ticks(process.pid))

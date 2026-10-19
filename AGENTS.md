@@ -58,7 +58,6 @@
 
 ## 当前事实
 
-- `stage3/jev.py` 已提供 Jev Decisions API 包装，`stage3/demo.py` 是文本情感决策示例。
 - Stage 3 当前默认为 SUPER＋PX4/GNSS 定位，Humble Docker 与 PX4/Gazebo Docker 运行无附加标记的实体走廊；2 m/s 往返与 Gazebo＋点云 RViz＋ROG 体素地图 RViz 三窗口已验收。FAST-LIO2 为显式对照，提供约 30 Hz 配准点云与 200 Hz IMU 传播；带标记往返及持续雷达失流降落已验收，原赛道纯 LIO 完整往返仍失败。当前已移除固定高度投影、加高墙柱到 8 m，起飞高度 1.95 m；新场景 XYZ 执行已通过 2 m/s 一次往返，5 m/s XYZ、含悬空障碍三维避障、LIO 5 档、实机与板端待验证。入口、证据和并行开发边界见 docs/stage3/Development.md。
 - AirSim 替换后端位于 `stage3/super/airsim/`；PC 场景＋PX4 Docker＋Humble SUPER Docker，当前基线及默认入口为 forest10-ab（10 m/s）单目标，八航点仅保留为显式历史对照。单目标 `runtime.forest10-ab.json` 保持 20 m 规划距离，已修正 A* 裁剪终点返回值并通过真实搜索回归；实飞已连续重规划，但碰撞中止，约 235 m 长任务未验收。入口与证据见该目录 README，上游问题报告见 `docs/stage3/SUPER-astar-clipped-goal-report.md`。
 - Stage 3 AirSim/SUPER 的 RoboPi 后端入口已实现（PC 单容器＋板端原生，GNSS、无 LIO），构建、部署及无显示步骤见 AirSim README；单容器 PC 镜像、以太网 DDS、无显示 Docker 短程/forest1/forest10 基线已通过；目标构建、板端加载/消息序列化、1 m/s 短程与 forest1 往返已通过，低速雷达/规划器/时钟失流及控制桥退出降落通过；forest10 首轮因指令超时降落，三次成功冷启动待完成，证据见 docs/stage3/RoboPi-validation.md。

@@ -1,0 +1,21 @@
+{
+  "binary_env": "AIRSIM_MOUNTAINS",
+  "scene_backend": "packaged",
+  "scene_args": [],
+  "rpc_host": "127.0.0.1",
+  "rpc_port": 41451,
+  "vehicle_name": "Drone1",
+  "spawn_ned_m": [
+    2.9096875,
+    -40.500078125,
+    3.17740234375
+  ],
+  "spawn_yaw_deg": 180,
+  "camera_mount": "airsim_default",
+  "px4_image": "px4io/px4-sitl-gazebo:latest",
+  "ros_image": "uav-computer-ros-humble:local",
+  "px4_container": "uav-stage5-airsim-px4",
+  "ros_container": "uav-stage5-airsim-ros",
+  "camera_hz": 10,
+  "raw_port": 8189
+}

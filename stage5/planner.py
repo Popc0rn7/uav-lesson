@@ -53,7 +53,7 @@ def validate_plan(plan, max_seconds=300):
 def generate(config,task,image,seconds):
     base=config.get('QWEN_BASE_URL','').rstrip('/')
     model=config.get('QWEN_MODEL','')
-    if not base or not model:raise ValueError('请在 stage5/.env 配置 QWEN_BASE_URL 与 QWEN_MODEL')
+    if not base or not model:raise ValueError('请在项目根目录 .env 配置 QWEN_BASE_URL 与 QWEN_MODEL')
     content=[{'type':'text','text':f'用户任务：{task}\n缺省持续时长及单阶段上限：{seconds} 秒。'},
              {'type':'image_url','image_url':{'url':'data:image/png;base64,'+base64.b64encode(image).decode()}}]
     headers={'Content-Type':'application/json'}

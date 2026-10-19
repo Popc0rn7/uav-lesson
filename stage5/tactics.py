@@ -2,6 +2,7 @@
 
 保留单 worker、单槽队列、限频、预算、指纹缓存；输出建议，不控制 PX4。
 """
+import copy
 import hashlib
 import json
 import math
@@ -17,11 +18,13 @@ MANEUVERS = {
     'climb': '向上改变观察位置，仅在 up_1m 候选路径 clear 时选择。',
     'brake': '保持位置或减速等待。目标太近、路径 blocked/unknown、信息陈旧时优先。',
     'reacquire': '需要重新确认目标或其方向。表示观察意图，不授权盲目移动。',
+    'approach_target': '目标已确认时按方位低速水平接近，保持高度；实测距离可用则使用实测，超量程时20米仅为截断代理值；此动作不计算跟随达标。',
+    'scan_yaw': '保持位置与高度，以受限角速度原地偏航；依据Qwen当前阶段语言指示决定是否使用或停止，不授权平移。',
 }
 DEFAULT = dict(maneuver='brake', risk=None, confidence=0, target_ambiguous=None,
                source='default', probabilities={}, actionable=False)
 PATHS = {'hold_course': 'forward_1m', 'gap_left': 'forward_left_1m',
-         'gap_right': 'forward_right_1m', 'climb': 'up_1m'}
+         'gap_right': 'forward_right_1m', 'climb': 'up_1m', 'approach_target': 'forward_1m'}
 
 
 def questions():
@@ -29,7 +32,8 @@ def questions():
     return {
         'maneuver': Choice(instructions='依据用户任务、目标候选和局部空间，选择下一项战术行为。'
             'unknown 不是 clear；too_far 是超过量程的信息，不是目标丢失。'
-            '深度是可见表面而非车中心；没有目标运动方向时不能声称已到车后方。', criteria=MANEUVERS),
+            '深度是可见表面而非车中心；没有目标运动方向时不能声称已到车后方。',
+            criteria={k:v for k,v in MANEUVERS.items() if k not in ('scan_yaw', 'approach_target')}),
         'risk': Score(instructions='当前追踪或拟移动的风险有多大？',
                       criteria=['clear and open', 'uncertain or tight', 'immediate collision risk']),
         'target_ambiguous': Noul(instructions='目标身份、方向或距离是否仍有会影响本轮动作选择的歧义？'
@@ -55,8 +59,12 @@ def build_state(targets, voxels, capture, mission):
         behavior_options=MANEUVERS, execution_mode='advisory_only')
 
 
+from latency import record as record_latency
+
+
 class Tactician:
     def __init__(self, config, client=None, question_set=None):
+        self.latency_output = config.get('LATENCY_OUTPUT')
         self.hz = float(config.get('JEV_CALL_HZ', '1'))
         self.budget = int(config.get('JEV_CALL_BUDGET', '10'))
         self.timeout = float(config.get('JEV_TIMEOUT', '10'))
@@ -71,8 +79,7 @@ class Tactician:
             raise ValueError('Jev 频率、预算、超时和 TTL 必须为正数')
         if client is None:
             from decision_client import DecisionClient
-            self.client = DecisionClient(config, self.timeout)
-            self.questions = question_set or questions()
+            self.client, self.questions = DecisionClient(config, self.timeout), question_set or questions()
         else:
             self.client, self.questions = client, {}
         self.attempts = self.calls = self.errors = 0
@@ -81,6 +88,7 @@ class Tactician:
         self._latest = dict(DEFAULT)
         self._pending = False
         self._last_sent = float('-inf')
+        self._last_sent_target_available = False
         self._last_key = None
         self._observed_at = None
         self._failures = 0
@@ -108,14 +116,18 @@ class Tactician:
         with self._lock:
             if self._terminal_error or now < self._retry_at:
                 return False
-            if self._pending or self.attempts >= self.budget or now-self._last_sent < 1/self.hz:
+            target_available = bool((state['observed'].get('tracking') or {}).get('confirmed'))
+            newly_available = (target_available and not self._last_sent_target_available
+                               and state['observed'].get('target_response_source') == 'dino_rgbd_current_frame')
+            if self._pending or self.attempts >= self.budget or (now-self._last_sent < 1/self.hz and not newly_available):
                 return False
             # 缓存不能靠新一帧重复 offer 刷新原决策的观测时间。
             if key == self._last_key and self._observed_at is not None and now-self._observed_at <= self.ttl:
                 return False
             self._pending = True
             self._last_sent, self._last_key = now, key
-            self._queue.put_nowait((state, observed_at))
+            self._last_sent_target_available = target_available
+            self._queue.put_nowait((copy.deepcopy(state), observed_at))
         return True
 
     def read(self):
@@ -167,6 +179,7 @@ class Tactician:
                 self.attempts += 1
             try:
                 started = time.monotonic()
+                success = False
                 response = self.client.system_one(state=state, model=self.model, questions=self.questions)
                 answers = response.answers
                 maneuver = answers['maneuver'].choice
@@ -174,18 +187,45 @@ class Tactician:
                 ambiguous = float(answers['target_ambiguous'].noul) if 'target_ambiguous' in answers else None
                 if maneuver not in MANEUVERS or not 0 <= confidence <= 1 or not 0 <= risk <= 2 or ambiguous is not None and not 0 <= ambiguous <= 1:
                     raise ValueError('Jev 返回选项或分数不合法')
+                fresh_limit = 1. if state['observed'].get('target_response_source') == 'dino_rgbd_current_frame' else .7
                 path = PATHS.get(maneuver)
                 candidate = state['observed']['local_space']['motion_candidates'].get(path, {}) if path else {}
                 allowed = path is None or candidate.get('status') == 'clear'
-                if (state.get('execution_mode') == 'simulation_follow' and maneuver == 'hold_course'
+                if maneuver == 'scan_yaw':
+                    health = state.get('execution_health', {})
+                    allowed = bool(health.get('active_search_available')
+                                   and 'scan_yaw' in state.get('stage', {}).get('allowed_skills', [])
+                                   and state['observed'].get('observation_age_s', 99) < fresh_limit
+                                   and not state['observed'].get('perception_error'))
+                if (state.get('execution_mode') == 'simulation_follow' and maneuver in ('hold_course', 'approach_target')
                         and candidate.get('execution_policy') == 'cautious' and candidate.get('status') == 'unknown'):
                     allowed = True
-                judgment = dict(maneuver=maneuver, confidence=confidence, risk=risk,
+                guard_reason = None if allowed else 'candidate path blocked or unknown'
+                if maneuver == 'approach_target':
+                    tracking = state['observed'].get('tracking') or {}
+                    allowed = bool(allowed and tracking.get('confirmed')
+                                   and 'approach_target' in state.get('stage', {}).get('allowed_skills', [])
+                                   and state['observed'].get('observation_age_s', 99) < fresh_limit
+                                   and not state['observed'].get('perception_error'))
+                    if not allowed:
+                        guard_reason = ('approach target unavailable' if not tracking.get('confirmed') else
+                                        'approach not allowed in stage' if 'approach_target' not in state.get('stage', {}).get('allowed_skills', []) else
+                                        'approach observation stale' if state['observed'].get('observation_age_s', 99) >= fresh_limit else
+                                        'approach perception error' if state['observed'].get('perception_error') else
+                                        'candidate path blocked or unknown')
+                observed_tracking = state['observed'].get('tracking') or {}
+                evidence = dict(observed_at_monotonic=observed_at,
+                    capture_received_monotonic=state['observed'].get('capture_received_monotonic'),
+                    tracking_confirmed=bool(observed_tracking.get('confirmed')),
+                    tracking=copy.deepcopy(observed_tracking),
+                    valid_follow_s=state.get('progress', {}).get('valid_follow_s', 0),
+                    failure_facts=copy.deepcopy(state.get('execution_health', {}).get('failure_facts', {})))
+                judgment = dict(maneuver=maneuver, confidence=confidence, risk=risk, decision_evidence=evidence,
                     target_ambiguous=ambiguous, probabilities=answers['maneuver'].probabilities,
                     source='jev', latency_s=time.monotonic()-started,
                     tokens=(response.usage.input_tokens or 0)+(response.usage.output_tokens or 0),
-                    path_allowed=allowed, effective_maneuver=maneuver if allowed else 'brake',
-                    guard_reason=None if allowed else 'candidate path blocked or unknown',
+                    motion_path_allowed=allowed, path_allowed=allowed, effective_maneuver=maneuver if allowed else 'brake',
+                    guard_reason=None if allowed else guard_reason,
                     execution_mode='advisory_only')
                 if 'stage_status' in self.questions:
                     status=answers['stage_status'].choice
@@ -199,9 +239,16 @@ class Tactician:
                     if reason not in self.questions['stage_reason'].criteria:
                         raise ValueError('Jev stage_reason 不合法')
                     judgment['stage_reason'] = reason
+                judgment['choice_groups'] = [
+                    dict(key=key, options=[dict(key=option, description=description)
+                                          for option, description in question.criteria.items()],
+                         selected=answers[key].choice)
+                    for key, question in self.questions.items() if question.type == 'choice'
+                ]
                 for field in ('plan_revision','stage_id','attempt'):
                     if field in state:
                         judgment[field] = state[field]
+                success = True
                 with self._lock:
                     self.calls += 1
                     self._failures = 0
@@ -237,6 +284,11 @@ class Tactician:
                     self._observed_at = observed_at
                     self._last_key = None
             finally:
+                record_latency(self.latency_output, 'jev_request', time.monotonic()-started, success=success)
+                record_latency(self.latency_output, 'state_to_jev_result', time.monotonic()-observed_at, success=success)
+                age = state['observed'].get('observation_age_s')
+                if age is not None:
+                    record_latency(self.latency_output, 'capture_to_jev_result', time.monotonic()-observed_at+age, success=success)
                 with self._lock:
                     self._pending = False
                 self._queue.task_done()

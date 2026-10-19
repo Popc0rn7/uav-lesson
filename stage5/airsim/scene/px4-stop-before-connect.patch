@@ -1,0 +1,75 @@
+--- a/Plugins/AirSim/Source/AirLib/include/vehicles/multirotor/firmwares/mavlink/MavLinkMultirotorApi.hpp
++++ b/Plugins/AirSim/Source/AirLib/include/vehicles/multirotor/firmwares/mavlink/MavLinkMultirotorApi.hpp
+@@ -10,6 +10,7 @@
+ #include "MavLinkVehicle.hpp"
+ #include "MavLinkVideoStream.hpp"
+ 
++#include <atomic>
+ #include <exception>
+ #include <memory>
+ #include <mutex>
+@@ -48,6 +49,22 @@
+     public: //methods
+         virtual ~MavLinkMultirotorApi()
+         {
++            shutting_down_ = true;
++            connecting_ = false;
++            // MavLinkCom close() does not cancel its blocking TCP accept. Wake
++            // only our pending accept during destruction; never probe a live HIL.
++            while (tcp_accept_pending_) {
++                try {
++                    const auto address = connection_info_.local_host_ip.empty() || connection_info_.local_host_ip == "0.0.0.0"
++                        ? std::string("127.0.0.1") : connection_info_.local_host_ip;
++                    auto wake = mavlinkcom::MavLinkConnection::connectTcp("shutdown", address, address, connection_info_.tcp_port);
++                    wake->close();
++                }
++                catch (const std::exception&) {
++                    // The worker may have announced accept before bind completed.
++                }
++                std::this_thread::sleep_for(std::chrono::milliseconds(1));
++            }
+             closeAllConnection();
+             if (this->connect_thread_.joinable()) {
+                 this->connect_thread_.join();
+@@ -959,9 +976,11 @@
+ 
+         void connect_thread()
+         {
++            if (shutting_down_) return;
+             addStatusMessage("Waiting for mavlink vehicle...");
+             connecting_ = true;
+             createMavConnection(connection_info_);
++            if (shutting_down_) return;
+             if (mav_vehicle_ != nullptr) {
+                 connectToLogViewer();
+                 connectToQGC();
+@@ -1292,11 +1311,20 @@
+ 
+                 auto msg = Utils::stringf("Waiting for TCP connection on port %d, local IP %s", connection_info.tcp_port, connection_info_.local_host_ip.c_str());
+                 addStatusMessage(msg);
++                tcp_accept_pending_ = true;
++                if (shutting_down_) {
++                    tcp_accept_pending_ = false;
++                    return;
++                }
+                 try {
+                     connection_ = std::make_shared<mavlinkcom::MavLinkConnection>();
+                     remoteIpAddr = connection_->acceptTcp("hil", connection_info_.local_host_ip, connection_info.tcp_port);
++                    if (shutting_down_) connection_->close();
++                    tcp_accept_pending_ = false;
++                    if (shutting_down_) return;
+                 }
+                 catch (std::exception& e) {
++                    tcp_accept_pending_ = false;
+                     addStatusMessage("Accepting TCP socket failed, is another instance running?");
+                     addStatusMessage(e.what());
+                     return;
+@@ -1997,6 +2025,8 @@
+         std::thread connect_thread_;
+         bool connecting_ = false;
+         bool connected_ = false;
++        std::atomic<bool> shutting_down_{false};
++        std::atomic<bool> tcp_accept_pending_{false};
+         common_utils::SmoothingFilter<float> ground_filter_;
+         double ground_variance_ = 1;
+         const double GroundTolerance = 0.1;

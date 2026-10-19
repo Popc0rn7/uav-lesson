@@ -101,6 +101,12 @@ Stage 3 当前收束点：MID-360 视场与时间分片扫描近似、FAST-LIO2 
 
 ## Stage 5 扩展：语义目标跟随
 
+当前默认AirSim Shipping，下面Gazebo指标为历史对照：
+
+- [x] AirSim_Mountains Shipping包获用户接受；根.env场景地址、统一runtime生命周期、包内settings/UserDir/三车路线交付与静止启停通过。
+- [x] DINO当前候选／最大深度层／原始记忆、Jev偏航接近、持续跟随、Qwen恢复子任务与验收overlap协议接入。
+- [ ] Shipping完整任务的受控多轮成功率、复杂遮挡恢复、其他两种跟随方式与长期GPU稳定性。
+
 - [x] 独立 Gazebo 街区与可启动/停止/复位的红色方块车。
 - [x] 标准机相机、真实本地 DINO＋深度测距、粗体素局部空间与 Jev 建议链路。
 - [x] Jev 选择跟随行为、PX4 MAVLink Offboard 执行的 PC 初版：红色目标颜色/RGBD 跟踪，0.7 m/s 环路车辆，35 秒及60秒实际跟随；60秒同步评测水平间距中位数 7.92 m，高于车尾 2.16 m。
@@ -109,7 +115,7 @@ Stage 3 当前收束点：MID-360 视场与时间分片扫描近似、FAST-LIO2 
 
 - [x] 真实 Qwen3.6-35B-A3B 视觉规划→DINO→Jev→PX4 单阶段闭环：60秒任务、32次真实Jev调用无错误，Jev确认 completed；运动后半段真值水平距离中位数7.95 m、上方2.11 m。
 - [x] Qwen验收任务运行器：两阶段真实动态任务通过，Qwen分别accept；任务预算/timeout、预算外总结、进度与历史记账、redo/modify_stage/modify_plan通过受控协议及单元测试。
-- [ ] 搜索/绕障技能、复杂场景下重规划效果与多轮稳定性验证。
+- [ ] 搜索恢复效果、绕障执行、复杂场景下重规划效果与多轮稳定性验证。
 
 架构、代码入口与[当前关键问题](stage5/Agent.md#9-当前仍存在的关键问题)见 [Agent介绍](stage5/Agent.md)；操作见 [Stage 5 Hands-on](stage5/Hands-on.md)，实测证据见 [Validation](stage5/Validation.md)。
 

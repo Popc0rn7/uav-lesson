@@ -1,0 +1,73 @@
+--- a/Source/demo/ConvoyDriver.cpp
++++ b/Source/demo/ConvoyDriver.cpp
+@@ -1,4 +1,5 @@
+ #include "ConvoyDriver.h"
++#include "AIController.h"
+ #include "ArmoredVehicle.h"
+ #include "CarRouteManager.h"
+ #include "Components/SkeletalMeshComponent.h"
+@@ -56,7 +57,16 @@
+ 
+ void AConvoyDriver::Park(AWheeledVehicle* Vehicle)
+ {
++    // Route release can destroy the temporary AI controller. PhysX then reuses
++    // the last replicated driving inputs and ignores these new raw brake inputs.
++    if (!Vehicle->GetController())
++    {
++        AAIController* ParkingController = GetWorld()->SpawnActor<AAIController>();
++        if (ParkingController) ParkingController->Possess(Vehicle);
++    }
+     auto* M = Vehicle->GetVehicleMovement();
++    // Arcade reverse-as-brake ignores SetBrakeInput while coasting.
++    M->bReverseAsBrake = false;
+     M->SetThrottleInput(0.f); M->SetSteeringInput(0.f);
+     M->SetBrakeInput(1.f); M->SetHandbrakeInput(true);
+ }
+--- /dev/null
++++ b/Source/demo/Tests/ConvoyParkingTests.cpp
+@@ -0,0 +1,45 @@
++#include "../ConvoyDriver.h"
++#if WITH_DEV_AUTOMATION_TESTS
++#include "AIController.h"
++#include "Components/SkeletalMeshComponent.h"
++#include "Engine/Engine.h"
++#include "Engine/World.h"
++#include "Misc/AutomationTest.h"
++#include "WheeledVehicle.h"
++#include "WheeledVehicleMovementComponent.h"
++
++IMPLEMENT_SIMPLE_AUTOMATION_TEST(FConvoyParkingControllerTest, "Demo.Convoy.ParkingController",
++    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
++
++bool FConvoyParkingControllerTest::RunTest(const FString& Parameters)
++{
++    UWorld* World = UWorld::CreateWorld(EWorldType::Game, false, FName(TEXT("ConvoyParkingTest")));
++    if (!TestNotNull(TEXT("Isolated world"), World)) return false;
++    GEngine->CreateNewWorldContext(EWorldType::Game).SetCurrentWorld(World);
++    UClass* PickupClass = LoadClass<AWheeledVehicle>(nullptr,
++        TEXT("/Game/VehicleVarietyPack/Blueprints/Pickup/BP_Pickup.BP_Pickup_C"));
++    if (!TestNotNull(TEXT("Pickup blueprint"), PickupClass))
++    {
++        World->DestroyWorld(false); GEngine->DestroyWorldContext(World); return false;
++    }
++    FActorSpawnParameters Spawn;
++    Spawn.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
++    AWheeledVehicle* Vehicle = World->SpawnActor<AWheeledVehicle>(PickupClass, FVector::ZeroVector, FRotator::ZeroRotator, Spawn);
++    if (TestNotNull(TEXT("Pickup"), Vehicle))
++    {
++        Vehicle->GetMesh()->SetSimulatePhysics(false);
++        if (AController* Controller = Vehicle->GetController()) Controller->UnPossess();
++        Vehicle->GetVehicleMovement()->bReverseAsBrake = true;
++        AConvoyDriver* Driver = World->SpawnActor<AConvoyDriver>();
++        Driver->Vehicles.Add(Vehicle);
++        Driver->ExecuteRpcCommand(TEXT("simStopConvoy"));
++        AController* Parking = Vehicle->GetController();
++        TestTrue(TEXT("Stopped pickup retains a local controller to update PhysX inputs"), Parking && Parking->IsLocalController());
++        TestFalse(TEXT("Direct brake input is enabled while parked"), Vehicle->GetVehicleMovement()->bReverseAsBrake);
++        Driver->Tick(0.1f);
++        TestTrue(TEXT("Repeated parking reuses its controller"), Vehicle->GetController() == Parking);
++    }
++    World->DestroyWorld(false); GEngine->DestroyWorldContext(World);
++    return true;
++}
++#endif

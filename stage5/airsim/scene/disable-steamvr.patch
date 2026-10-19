@@ -1,0 +1,13 @@
+--- a/demo.uproject
++++ b/demo.uproject
+@@ -37,6 +37,10 @@
+     {
+       "Name": "AirSim",
+       "Enabled": true
++    },
++    {
++      "Name": "SteamVR",
++      "Enabled": false
+     }
+   ]
+ }

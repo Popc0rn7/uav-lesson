@@ -80,7 +80,7 @@ def main():
         if failed:
             raise SystemExit(1)
     except ImportError:
-        raise SystemExit('Jev SDK 或代理依赖缺失；PC 仓库根目录执行 uv sync --extra stage5') from None
+        raise SystemExit('Jev运行依赖缺失；PC仓库根目录执行 uv sync --extra stage5') from None
     except (OSError, ValueError, RuntimeError, KeyError, TypeError) as exc:
         # 此处异常为配置/本地输入诊断；SDK 异常在 worker 中只保存类型。
         raise SystemExit(f'{type(exc).__name__}: {exc}\n诊断目录：{directory}') from exc

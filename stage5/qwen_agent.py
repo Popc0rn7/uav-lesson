@@ -32,7 +32,7 @@ reacquire只会原地等待目标回到当前视野，不具备转头、移动�
 progress.enabled_follow_s包含接近目标的时间，不能当达标时长；valid_follow_s仅累计水平目标点误差<=1米且垂直误差<=0.5米的有效跟随时间。
 metrics的median包括初始接近阶段；验收应结合valid_follow_s、末段/最新误差和图片，不把全程median误称当前距离。
 阶段结束后无人机悬停；Qwen请求期间仿真和车辆持续运动；不会抹去此前已完成的达标跟随事实。区分阶段结束证据与验收时当前画面。
-任务剩余Qwen预算和总timeout不能增加。redo继承进度但不退还消耗，需要明确新增allocation；修改要求后旧证据仍保留，但新要求需重新验证。
+任务剩余Qwen预算和总timeout不能增加。redo继承进度但不退还消耗，allocation可省略并复用当前阶段额度配置；action优先，无关参数忽略；修改要求后旧证据仍保留，但新要求需重新验证。
 验收输入包含当前阶段、计划概要、阶段结果报告、完整文字对话历史、预算和最新RGB。history中的user/assistant是此前对话，非当前指令。历史图片不重复提供，以本轮图片为当前现场。stage_report只包含本轮执行结果，tracking_at_end为结束时事实，不能当成最新图像状态。所有结束原因都允许accept，不需要追随Jev的判断。
 无法继续原始任务且没有有效恢复策略时，返回 {"action":"abort","assessment":"无法继续的证据和原因"}，直接结束为failed，不再消耗额度原地重做。不得用空stages结束，不得把放弃跟随改成观察后宣称原任务成功。
 验收只返回以下一种：
@@ -58,7 +58,7 @@ class QwenAgent:
         self.last_metrics = {}; self.last_request = {}
         self.model_id = config.get('QWEN_MODEL')
         if not config.get('QWEN_BASE_URL') or not config.get('QWEN_MODEL'):
-            raise ValueError('stage5/.env 缺少 QWEN_BASE_URL 或 QWEN_MODEL')
+            raise ValueError('项目根目录 .env 缺少 QWEN_BASE_URL 或 QWEN_MODEL')
 
     def request(self, purpose, payload, images, timeout):
         if purpose == 'summary':
@@ -67,7 +67,7 @@ class QwenAgent:
                       '依据输入里的outcome、reason、context、history中的已接受阶段、阶段报告及用量，说明完成了什么、未完成什么和局限。'
                       'planned表示仅生成计划，没有执行。不要把模型判断等同于真实达标，也不要编造成功。')
         else:
-            system = SYSTEM + ('\n本次是初始规划调用，只返回version=2的完整计划，不返回action。'
+            system = self.config.get('QWEN_SYSTEM', SYSTEM) + ('\n本次是初始规划调用，只返回version=2的完整计划，不返回action。'
                                if purpose == 'plan' else
                                '\n本次是阶段验收调用，只返回五种action之一，不返回初始计划或总结。')
         current = {'purpose': purpose, **compact(payload, purpose)}

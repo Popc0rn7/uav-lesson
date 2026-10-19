@@ -83,16 +83,17 @@ def build(meta, data, model, size=.25, stride=8, extent=8, radius=.45):
                     free.add(key(point, size))
     free.difference_update(occupied)
     points = [list(center(k, size)) for k in sorted(occupied)]
-    actions = {name: check_move(occupied, free, size, delta, radius)
+    body = tuple(model.get('body_center_camera_flu_m', [-.186, 0, -.025]))
+    actions = {name: check_move(occupied, free, size, delta, radius, body)
                for name, delta in MOVES.items()}
     return dict(frame='camera_flu', axes='x forward, y left, z up', units='m',
                 sim_time=meta['sim_time'], voxel_size_m=size, pixel_stride=stride,
                 local_bounds_m=[[0, extent], [-extent/2, extent/2], [-extent/2, extent/2]],
-                drone_radius_m=radius, body_center_camera_m=[-.186, 0, -.025],
+                drone_radius_m=radius, body_center_camera_m=list(body),
                 assumptions=['single frame; no world map', 'ideal Gazebo +Inf means no surface before far clip',
                              'initial body envelope assumed clear', 'sparse rays leave unobserved voxels unknown'],
                 ray_counts=counts, occupied_count=len(occupied), free_count=len(free),
-                nearest_surface_m=min((math.dist(p, (-.186, 0, -.025)) for p in points), default=None),
+                nearest_surface_m=min((math.dist(p, body) for p in points), default=None),
                 occupied_points_m=points, motion_candidates=actions)
 
 

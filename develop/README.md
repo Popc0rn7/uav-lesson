@@ -15,6 +15,8 @@
 
 **截至 2026-10-16 的边界：** Gazebo 当前 GNSS 走廊 2 m/s XYZ 往返、AirSim 低速短程／树林往返、RoboPi 1 m/s 短程及 forest1 往返已有实测；完整 AB 长任务未通过。AirSim 当前默认是 `runtime.forest10-ab.json` 单远端目标，初学复现应显式选低速配置。八航点结果、瞬时速度峰值或 `inspect` 就绪均不能替代 AB 验收。
 
+Stage 5 同处于“AirSim替换Gazebo”层，当前日常场景为已接受的Shipping车队包，runtime生命周期已对齐SUPER；模型/任务与场景交付边界见[Stage 5开发导航](../docs/stage5/Development.md)。其静止链路可复用本阶段证据，但不得拿SUPER/Gazebo结果替代车队完整任务验收。
+
 ## 第一步：把上游仓库变成可解释的基线
 
 先读 [来源与接口约束](../docs/stage3/Bring-up.md) 和 [SUPER 核心维护方式](../docs/stage3/SUPER-fork.md)。Bring-up 中相邻仓库、绝对路径和复制方式是历史记录；当前源码入口是 `submodules/SUPER/`，`prepare_super.py` 只初始化／检查子模块和工作区链接，不再搬入旧源码。

@@ -9,7 +9,6 @@ import mimetypes
 import os
 from pathlib import Path
 import struct
-import sys
 import time
 import urllib.error
 import urllib.request
@@ -19,13 +18,11 @@ import zlib
 HERE = Path(__file__).resolve().parent
 
 
-sys.path.insert(0, str(HERE.parent / 'src'))
-from uav_scene_env import configuration as environment_configuration
-
-
 def configuration():
-    config = environment_configuration(HERE / '.env')
-    # 相机由课程本机服务提供，固定一个地址；不从环境变量覆盖。
+    from dotenv import dotenv_values
+    values = dotenv_values(HERE.parent / '.env')
+    config = {**{k:v for k,v in values.items() if v is not None}, **os.environ}
+    # 与主仓库一致：相机由课程本机桥提供，不从环境文件选择另一个现场。
     config.update(STAGE5_RGB_URL='http://127.0.0.1:8189/rgb',
                   STAGE5_DEPTH_URL='http://127.0.0.1:8189/depth')
     return config

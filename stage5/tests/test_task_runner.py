@@ -52,6 +52,88 @@ class Runtime:
 
 
 class TaskTests(unittest.TestCase):
+    def test_ui_review_stays_on_stage_until_accept(self):
+        with tempfile.TemporaryDirectory() as directory:
+            runtime = Runtime(['done', 'done', 'done'])
+            model = Model([make_plan(stage('one'), stage('two')),
+                           {'action': 'redo', 'allocation': {'budget': 2, 'timeout': 10}},
+                           {'action': 'accept'}, {'action': 'accept'}])
+            request = model.request
+            snapshots = []
+            def capture(purpose, *args):
+                if purpose == 'review':
+                    snapshots.append(json.loads((Path(directory)/'ui.json').read_text()))
+                return request(purpose, *args)
+            model.request = capture
+            runner = TaskRunner('跟随红车', model, lambda deadline: runtime, directory, timeout=10)
+            self.assertEqual(runner.run(), 0)
+            self.assertEqual([s['qwen_stage_id'] for s in snapshots], ['one', 'one', 'two'])
+            self.assertEqual([s['current_index'] for s in snapshots], [0, 0, 1])
+            self.assertTrue(all(s['qwen_activity'] == 'review' for s in snapshots))
+            final = json.loads((Path(directory)/'ui.json').read_text())
+            self.assertIsNone(final['qwen_activity'])
+            self.assertIsNone(final['qwen_stage_id'])
+
+    def test_action_priority_ignores_unrelated_invalid_parameters(self):
+        current=make_plan()
+        for action in ('accept','abort'):
+            parsed=review(dict(action=action,assessment='reason',stage=None,stages=42,allocation=None),current,0)
+            self.assertEqual(parsed['ignored_fields'],['allocation','stage','stages'])
+        for action,parameter in (('modify_stage','stage'),('modify_plan','stages')):
+            with self.assertRaises(ValueError):
+                review(dict(action=action),current,0)
+        with self.assertRaises(ValueError):
+            review(dict(action='redo',allocation=None),current,0)
+
+    def test_redo_without_allocation_uses_existing_config_without_extra_repair(self):
+        runner,model,runtime,root,result=self.execute([
+            make_plan(),{'action':'redo','stages':['ignored']},{'action':'accept'}],['failed','done'])
+        self.assertEqual(result,0)
+        self.assertEqual(runner.calls,3)
+        self.assertEqual(runtime.starts[0]['stage']['allocation'],runtime.starts[1]['stage']['allocation'])
+        self.assertEqual(runner.total_jev,4)
+        self.assertIn('qwen_ignored_fields',(root/'events.jsonl').read_text())
+
+    def test_recovery_subtasks_require_modify_plan_and_preserve_follow(self):
+        find=stage(id='find',skill='observe_target',allowed_skills=['brake','reacquire'])
+        follow=stage()
+        current=make_plan(find,follow)
+        recover=stage(id='recover_pickup_1',skill='observe_target',allowed_skills=['brake','reacquire','scan_yaw'])
+        suffix=[recover,follow]
+        redo=review({'action':'redo','stages':suffix},current,1)
+        self.assertNotIn('stages',redo)
+        self.assertEqual(redo['ignored_fields'],['stages'])
+        self.assertEqual(redo['allocation'],follow['allocation'])
+        result=review({'action':'modify_plan','stages':suffix},current,1)
+        self.assertEqual([x['id'] for x in result['stages']],['recover_pickup_1','follow'])
+        self.assertEqual(current['stages'][0]['id'],'find')
+
+    def test_review_services_continuation_and_accounts_extra_jev_calls(self):
+        directory=tempfile.TemporaryDirectory();self.addCleanup(directory.cleanup)
+        runtime=Runtime();runtime.continuing=False;runtime.review_ticks=0
+        original_end=runtime.end
+        def begin(result):
+            runtime.continuing=True
+            return original_end(result)
+        def service():
+            if runtime.continuing: runtime.review_ticks+=1
+        def finish():
+            runtime.continuing=False
+            return 2
+        runtime.begin_review=begin;runtime.finish_review=finish;runtime.service=service
+        model=Model([make_plan(),{'action':'accept'}]);request=model.request
+        def delayed(purpose,*args):
+            if purpose=='review':
+                self.assertTrue(runtime.continuing)
+                time.sleep(.06)
+            return request(purpose,*args)
+        model.request=delayed
+        runner=TaskRunner('跟随红车',model,lambda deadline:runtime,directory.name,timeout=10)
+        self.assertEqual(runner.run(),0)
+        self.assertGreater(runtime.review_ticks,0)
+        self.assertFalse(runtime.continuing)
+        self.assertEqual(runner.total_jev,4)
+
     def test_summary_resume_failure_cannot_leave_completed_outcome(self):
         from unittest.mock import Mock
         simulation=Mock();simulation.paused=False

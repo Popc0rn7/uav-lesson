@@ -24,7 +24,7 @@ PC 运行 PX4 SITL 与 Gazebo／AirSim 仿真，以及 QGroundControl、GUI 和�
 - Stage 3：SUPER＋PX4/GNSS；Gazebo 无附加标记走廊 2 m/s XYZ 往返与三窗口已验收，FAST-LIO2 保留为显式对照。当前标准主线为 AirSim，低速短程／树林往返及 RoboPi 原生 1 m/s 短程／forest1 往返已通过，完整 AB 长任务未通过；[Gazebo 操作](docs/stage3/Hands-on.md)、[Gazebo 验证](docs/stage3/Validation.md)、[AirSim 操作](stage3/super/airsim/README.md)、[板端验证](docs/stage3/RoboPi-validation.md)。统一算法对照、Stage 3 视觉接入和聊天 GUI 尚未完成。
 
 - Stage 4：AeroVLA 外部推理 API＋Town05 AirSim＋PX4／ROS 双 Docker；任务导出、轻量 uv 环境、WebUI、传感器与动作执行入口见 [Hands-on](docs/stage4/Hands-on.md)，实际验收范围见 [Validation](docs/stage4/Validation.md)。板端模型 HTTP 服务见 [AeroVLA](houmo/src/aerovla/README.md)，本阶段与板端的联合链路仍待验收。
-- Stage 5：Qwen分阶段规划与验收、Jev执行、红车RGBD跟随及只读任务灯箱；[架构与关键问题](docs/stage5/Agent.md)、[运行步骤](docs/stage5/Hands-on.md)、[验证记录](docs/stage5/Validation.md)。当前仅为指定街区的PC仿真demo，未验证通用目标、复杂绕障或实机。
+- Stage 5：已接受的 AirSim_Mountains Shipping 车队场景，统一 runtime 管理场景／PX4／ROS；Qwen 子任务规划验收、DINO/Jev 感知决策、黄皮卡后上方持续跟随与只读灯箱。场景地址使用根 `.env` 的 `AIRSIM_MOUNTAINS`；[操作入口](docs/stage5/Hands-on.md)、[架构与边界](docs/stage5/Agent.md)、[开发导航](docs/stage5/Development.md)、[验证记录](docs/stage5/Validation.md)。其他两种跟随、复杂遮挡恢复、多轮稳定性、绕障及实机未验收，Gazebo 结果保留为历史对照。
 
 ## Stage 2 标准机入口
 
@@ -59,11 +59,11 @@ cp -n .env.example .env
 
 编辑 `.env.example` 中列出的配置，再按本机环境填写 `.env`：
 
-- `AIRSIM_NH`（SUPER）、`AIRSIM_TOWN05`（AeroVLA）、`AIRSIM_RACE`（竞速）直接指向 Linux ELF，保留完整场景包资源，布局为 `<包根>/<项目>/Binaries/Linux/<ELF>`。settings 仍由各阶段独立准备，不从 bins 目录读取。
+- `AIRSIM_NH`（SUPER）、`AIRSIM_TOWN05`（AeroVLA）、`AIRSIM_RACE`（竞速）直接指向 Linux ELF，保留完整场景包资源，布局为 `<包根>/<项目>/Binaries/Linux/<ELF>`。Stage 2–4 的 settings 仍由各阶段独立准备；Stage 5 保留已接受场景包内的 settings。
 - `AEROVLA_API_URL`、`DINO_DETECT_URL` 是完整服务端点；`QWEN_BASE_URL` 是 OpenAI 兼容服务基址，配套 `QWEN_MODEL`。示例值不代表服务已启动。
 - Jev 使用 `JEV_BACKEND=typesafe|vllm`、`JEV_BASE_URL`、`JEV_MODEL` 和 `JEV_API_KEY`；vLLM System 1 另需模型头与校准 JSON，见 [Stage 5 操作说明](docs/stage5/Hands-on.md#jev-决策-clientpc)。RGB/depth 固定来自本机 8189 端口，不再提供两个环境变量。
 
-入口自动读取根 `.env`，无需 `source`。优先级为 shell > 根 `.env` > 旧阶段 `.env`（Stage 5 兼容）；显式客户端参数仍优先。根文件中空值也会覆盖旧阶段值。路径支持 `~`，相对路径以仓库根目录为基准。缺失或空的 AirSim 路径会明确报出变量名。
+入口自动读取根 `.env`，无需 `source`。优先级为 shell > 根 `.env`；显式客户端参数仍优先。Stage 5 不再读取旧 `stage5/.env`。路径支持 `~`，相对路径以仓库根目录为基准。缺失或空的 AirSim 路径会明确报出变量名。
 
 SUPER/Town05 的 runtime 用 `binary_env` 选择变量，自动推导包根目录；自定义 JSON 仍支持原 `scene_dir` + `binary`。race 的显式 `--scene`、prepare 的 `--source` 仍接收包根目录并优先于环境配置。竞速关卡沿用 level 选择，共用 ADRL 包。更改路径后在下次启动生效，已运行实例使用原快照。
 

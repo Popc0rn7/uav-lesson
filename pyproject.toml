@@ -19,7 +19,7 @@ flight-review = [
     "numpy>=1.26,<3",
     "matplotlib>=3.10,<4",
 ]
-stage5 = ["typesafe-sdk>=0.7,<1", "socksio>=1,<2", "pymavlink>=2.4.49,<3", "numpy>=2.5.3"]
+stage5 = ["typesafe-sdk>=0.7,<1", "socksio>=1,<2", "pymavlink>=2.4.49,<3", "numpy>=2.5.3", "pillow>=12.3.0"]
 stage2 = [
     "numpy>=2.5.3",
     "pillow>=12.3.0",

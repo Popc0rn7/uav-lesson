@@ -5,10 +5,12 @@ from pathlib import Path
 import queue
 import threading
 import time
+import traceback
 
 from agent_contracts import allocation, plan, progress_key, review, positive
 from planning_hints import guidance
 from agent_errors import FatalControl
+from latency import record as record_latency
 from evidence import write_json
 
 
@@ -38,6 +40,7 @@ class TaskRunner:
         self.execution_ended = None
         self.ui_runtime = {}
         self.ui_updated = 0; self.qwen_activity = None; self.last_decision = None
+        self.qwen_stage_id = None
 
     def write(self, name, value):
         write_json(self.output / name, value)
@@ -77,7 +80,8 @@ class TaskRunner:
                 runtime = {**runtime, 'active': False, 'jev_pending': False, 'dino_pending': False}
             value = dict(updated_monotonic=now, task=self.task, plan=self.current_plan,
                          current_index=self.index, revision=self.revision, accepted=self.accepted,
-                         qwen_activity=self.qwen_activity, last_decision=self.last_decision,
+                         qwen_activity=self.qwen_activity, qwen_stage_id=self.qwen_stage_id,
+                         last_decision=self.last_decision,
                          ledger=self.ledger(), finalized=self.finalized, runtime=runtime,
                          qwen_metrics=getattr(self.model,'last_metrics',{}),
                          simulation_paused=bool(self.simulation and self.simulation.paused))
@@ -127,6 +131,8 @@ class TaskRunner:
             self.calls += 1
             until = min(self.deadline, self.clock() + self.request_timeout)
         self.qwen_activity = purpose
+        self.qwen_stage_id = (self.current_plan['stages'][self.index]['id']
+                              if purpose == 'review' else None)
         self.publish_ui(force=True)
         self.event('qwen_request', purpose=purpose, execution_call=self.calls, summary_call=self.summary_calls)
         self.write('ledger.json', self.ledger())
@@ -139,6 +145,8 @@ class TaskRunner:
         self.write(f'qwen-{number}-input.json', {'purpose': purpose, 'payload': payload, 'images': image_records})
         answer = queue.Queue(maxsize=1)
         request_started = self.clock()
+        latency_started = time.monotonic()
+        request_success = False
         def request():
             try:
                 answer.put((True, self.model.request(purpose, payload, images, max(.01, until - self.clock()))))
@@ -173,11 +181,16 @@ class TaskRunner:
                     self.event('qwen_usage', purpose=purpose, **{k:v for k,v in self.model.last_metrics.items() if k!='purpose'})
                 if getattr(self.model, 'last_request', None):
                     self.write(f'qwen-{number}-request.json', self.model.last_request)
+                request_success = True
                 self.qwen_activity = None
                 self.last_decision = value
                 self.write(f'qwen-{number}-output.json', value)
                 return value
         finally:
+            self.qwen_activity = None
+            self.qwen_stage_id = None
+            self.publish_ui(force=True)
+            record_latency(self.output, 'qwen_request', time.monotonic()-latency_started, purpose=purpose, success=request_success)
             if self.simulation:
                 self.simulation.finish()
 
@@ -190,6 +203,8 @@ class TaskRunner:
             try:
                 value = self.invoke(purpose, payload, self.images())
                 result = validator(value)
+                if result.get('ignored_fields'):
+                    self.event('qwen_ignored_fields', purpose=purpose, action=result['action'], fields=result['ignored_fields'])
                 self.event('qwen_result', purpose=purpose, result=result)
                 return result
             except (TaskEnd, FatalControl, KeyboardInterrupt):
@@ -251,19 +266,27 @@ class TaskRunner:
                             self.service()
                             report = self.runtime.step()
                             if report is None: time.sleep(.02)
-                    except (TaskEnd, FatalControl, KeyboardInterrupt):
+                    except FatalControl as exc:
+                        report = {'status': 'failed', 'reason': 'control_fault: '+str(exc)}
+                        raise
+                    except (TaskEnd, KeyboardInterrupt):
                         raise
                     except Exception as exc:
                         report = {'status': 'failed', 'reason': 'executor_error', 'error_type': type(exc).__name__}
                     finally:
-                        report = self.runtime.end(report or {'status': 'failed', 'reason': 'task_stopped'})
+                        end_stage = getattr(self.runtime, 'begin_review', self.runtime.end)
+                        report = end_stage(report or {'status': 'failed', 'reason': 'task_stopped'})
                         report.update(tag)
                         self.reports.append(report)
                         self.total_jev += report['jev_calls']
                         self.write(f'attempt-{attempt:03d}/report.json', report)
                         self.write('ledger.json', self.ledger())
                         self.event('stage_end', **report)
-                    decision = self.ask('review', lambda value: review(value, self.current_plan, self.index, self.task))
+                    try:
+                        decision = self.ask('review', lambda value: review(value, self.current_plan, self.index, self.task))
+                    finally:
+                        if hasattr(self.runtime, 'finish_review'):
+                            self.total_jev += self.runtime.finish_review()
                     self.write(f'attempt-{attempt:03d}/review.json', decision)
                     action = decision['action']
                     if action == 'abort':
@@ -289,6 +312,7 @@ class TaskRunner:
             reason = 'interrupted'
         except Exception as exc:
             reason = 'runtime_error: ' + type(exc).__name__
+            (self.output / 'runtime-error.txt').write_text(traceback.format_exc(), encoding='utf-8')
             self.event('runtime_error', error_type=type(exc).__name__)
         finally:
             if self.simulation:

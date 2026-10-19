@@ -1,4 +1,5 @@
 from pathlib import Path
+import math
 import struct
 import sys
 import unittest
@@ -61,6 +62,32 @@ class DepthFusionTests(unittest.TestCase):
         self.assertEqual(target['status'], 'mixed_depth')
         self.assertEqual(len(target['depth_evidence']['distance_clusters']), 2)
         self.assertIsNone(target['position_m'])
+
+    def test_dominant_layer_retains_small_foreground(self):
+        row = struct.pack('<f', 3)*300 + struct.pack('<f', 12)*340
+        target = fuse(self.response, self.rgb, self.depth, row*400, self.model,
+                      depth_policy='dominant_layer')['targets'][0]
+        self.assertEqual(target['status'], 'estimated_surface')
+        self.assertEqual(target['position_m'][0], 12)
+        evidence = target['depth_evidence']
+        self.assertGreater(evidence['selected_layer']['support_fraction'], .5)
+        self.assertEqual(evidence['other_layers'][0]['min_m'], 3)
+        mapped = project_box(self.response['detections'][0]['box_xyxy'], 640, 360, self.model)
+        self.assertEqual(evidence['other_layers'][0]['depth_pixel_bounds_xyxy'],
+                         [math.floor(mapped[0]), math.floor(mapped[1]), 300, math.ceil(mapped[3])])
+
+    def test_dominant_far_layer_retains_finite_occluder(self):
+        row = struct.pack('<f', 3)*300 + struct.pack('<f', float('inf'))*340
+        target = fuse(self.response, self.rgb, self.depth, row*400, self.model,
+                      depth_policy='dominant_layer')['targets'][0]
+        self.assertEqual(target['status'], 'too_far')
+        self.assertEqual(target['distance_lower_bound_m'], 20)
+        self.assertGreater(target['depth_evidence']['other_layers'][0]['pixels'], 0)
+        self.assertLess(target['depth_evidence']['other_layers'][0]['support_fraction'], .5)
+
+    def test_dominant_layer_invalid_pixels_are_not_distance(self):
+        self.assertEqual(self.run_depth(float('nan'), depth_policy='dominant_layer')
+                         ['targets'][0]['status'], 'insufficient_depth')
 
     def test_far_return_is_information(self):
         target = self.run_depth(float('inf'))['targets'][0]

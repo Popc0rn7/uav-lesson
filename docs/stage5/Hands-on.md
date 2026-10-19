@@ -1,12 +1,123 @@
-# Stage 5：街区移动目标与自主任务
+# Stage 5：AirSim 车队语义跟随
 
-本版提供 Jev 跟随任务的 Gazebo 场景与初版飞行闭环：100 × 100 m 地面、12 栋建筑、环形道路和红色方块车。车头有浅黄色标记，车辆沿半径 24 m 的环路逆时针行驶，速度 2 m/s，一圈约 75.4 秒。世界名为 `stage5_street`，模型名为 `target_car`。
+当前默认使用已接受的 **AirSim_Mountains Shipping 场景＋PX4 Docker＋ROS Docker**，由统一 runtime 管理；Qwen规划与验收，DINO感知、Jev选择动作，PX4执行。日常运行不需要UE Editor。当前只开放黄皮卡后上方跟随，其他两种固定prompt仅保留为后续目标。
 
-目标车使用 Gazebo 内置 VelocityControl，关闭重力、保持车身中心高度 0.65 m，直接执行模型局部 +X 的线速度和绕 Z 的角速度；这是理想运动目标，不模拟轮胎、发动机或道路交通。建筑与地面具有碰撞几何，道路和标线只用于显示。当前接入 SUPER 同款 `x500_experiment`（Stage 2 原始 RGBD＋MID-360S 模型），由 PX4 控制；已接入 DINO、深度/体素及 Jev；跟随入口见文末。
+[架构与边界](Agent.md) · [开发导航](Development.md) · [验证记录](Validation.md)。本页是唯一当前操作入口；历史Gazebo对照保留在后半部分，不与Shipping链路混用。
 
-架构、Qwen/Jev职责、报告与历史、灯箱、代码入口及[当前关键问题](Agent.md#9-当前仍存在的关键问题)见 [Agent介绍](Agent.md)；逐轮实测见 [Validation](Validation.md)。本页集中说明准备、运行和恢复操作。
+## PC 准备与交付
 
-## 教师准备（PC）
+在PC仓库根目录准备一次依赖：
+
+```sh
+uv sync --extra stage5
+```
+
+这会安装PC任务所需NumPy、Pillow、MAVLink及模型客户端依赖；不要为复用本机已验证环境而反复sync。默认轻量RPC不依赖AirSim Python SDK。Docker镜像、DINO模型和推理服务需课前准备；runtime不下载镜像或模型。准备好的外部场景包及镜像不会随git clone分发。
+
+按根`.env.example`设置`AIRSIM_MOUNTAINS`和DINO/Jev/Qwen服务；保留整个LinuxNoEditor包、Shipping ELF、动态库、pak、包内settings和三车SaveGames。模板只提供占位地址，不包含密钥。TypeSafe代理使用显式`JEV_PROXY`，Qwen代理使用`QWEN_PROXY`；不要通过更改进程全局代理影响本机RPC。`health`/`task`会向已配置模型发真实请求，up/status/dry-run不会。
+
+## 当前默认：Shipping 场景统一 runtime（PC）
+
+2026-10-19 用户已接受 Shipping 包作为日常仿真环境。默认入口统一管理 **宿主机 Shipping 场景＋PX4 Docker＋ROS Docker**，不需要打开 UE Editor、手动 Play 或先运行包内脚本。后文 Editor/Gazebo 操作是迁移历史与对照，不按默认配置重复执行。
+
+在 PC **图形桌面终端、仓库根目录**运行，已有 Docker 镜像和已接受包，无需编译 UE：
+
+```sh
+.venv/bin/python -m stage5.airsim.runtime up
+.venv/bin/python -m stage5.airsim.runtime status
+```
+
+`up`先检查包内 Shipping 可执行文件、pak、settings和三份路线，确认端口空闲；显式携带`-settings`和`-UserDir=包内demo目录`启动场景。仅用监听信息等待本轮进程的HIL4565就绪，再启动PX4／ROS，检查真实RGBD、PX4定位和预检，成功判据`phase=ready`、`ready=true`、`scene.managed=true`、`scene.running=true`、PX4未解锁。重复up在同配置且健康时返回同一run/PID，不新开窗口。启动及status不调用DINO、Jev或Qwen。端口被手动场景或其他实例占用时拒绝接管；无监听但旧TCP残留时最多等待60秒释放，不以客户端探连HIL。场景启动、链路就绪超时保留failed状态和日志，用down回收后再up，不覆盖失败现场。
+
+根目录`./run-stage5.sh`现在等价于runtime up；`./run-stage5.sh status`／`down`也转发到同一入口。包内同名脚本仍是独立启动工具，日常runtime模式不要同时运行，避免重复场景。
+
+链路就绪后，统一使用与Stage 3 SUPER一致的runtime task入口：
+
+```sh
+.venv/bin/python -m stage5.airsim.runtime task --prompt-id pickup_rear_follow
+```
+
+task仍独立检查模型、负责起飞→悬停→启动车队→Qwen/Jev任务。runtime up不飞行、不启动行驶。结束任务后回收：
+
+```sh
+.venv/bin/python -m stage5.airsim.runtime down
+```
+
+公共命令与SUPER对齐：
+
+| 命令 | Stage 5行为 |
+| --- | --- |
+| `up` | 自动启动Shipping＋PX4／ROS；健康实例重复调用复用 |
+| `task` | 运行Qwen/DINO/Jev任务，转发`--prompt-id`、`--takeoff-height`、`--takeoff-timeout`、`--budget`、`--timeout` |
+| `status` | 只读场景/飞控/ROS与传感器状态，不调用模型；同时提供`airsim_alive`／`px4_running`／`ros_running` |
+| `land` | 持久取消本轮任务控制并请求PX4降落，不能视为已落地 |
+| `down` | 确认Disarmed后回收本轮资源 |
+| `stop` | 等价`down --force`，仿真急停，不能视为降落成功 |
+| `inspect`／`snapshot` | 本阶段状态／真实RGBD快照，区别于SUPER算法节点检查 |
+
+`up --dry-run`仅输出拓扑和输入，不连接Docker、场景、设备或模型；`up --image <本地镜像>`覆盖PX4镜像，不自动拉取。`--config`／`--state-dir`语义与SUPER一致，task使用本轮配置快照。根`./run-stage5.sh task`／`land`／`stop`也等价转发。
+
+任务与普通生命周期操作使用runtime.lock互斥，status不受任务阻塞，land/stop/down --force走独立recovery.lock，同一时刻仅一个恢复动作。正在up创建资源时不得并发恢复，先中断up再stop。land/stop写入本轮land.request.json，起飞屏障、开车前、任务控制都检查取消，防止人工降落后任务再起飞或切回Offboard/Hold；取消后若要新任务先down/up。task期间Ctrl+C请求降落。旧`stage5.airsim.task run`保留兼容，也使用同一任务锁。
+
+`down`先确认PX4 Disarmed，再回收本轮PX4／ROS和场景窗口。飞行中用独立`runtime land`请求降落，`runtime status`核实`armed=false`；仿真卡死且无法正常恢复时，显式`runtime down --force`回收，本操作不等于完成降落。仅处理本轮标签和容器ID匹配的容器；场景核对PID、Linux进程启动时刻、可执行文件和settings参数，PID复用或外部进程不会被误杀。重复down无运行实例时安全返回。
+
+场景地址与其他阶段统一放在仓库根`.env`，新增字段见[.env.example](../../.env.example)：
+
+```dotenv
+AIRSIM_MOUNTAINS=/path/to/AirSim_Mountains/LinuxNoEditor/demo/Binaries/Linux/demo-Linux-Shipping
+```
+
+这里填Shipping ELF完整路径，不是`.sh`或包目录；支持`~`，相对路径以仓库根目录为基准，有空格加引号。只修改此项，不覆盖已有模型密钥。Shell变量优先于根`.env`，不读取`.env.example`作为运行配置。`runtime up`从ELF推导包根、项目名、settings与UserDir，搬迁后只改这一项，无需原UE工程、源码或引擎安装。[运行配置](../../stage5/airsim/runtime.demo.json)维护拓扑与飞控参数，`binary_env=AIRSIM_MOUNTAINS`引用该地址，不再硬编码本机包路径；原`STAGE5_PACKAGE_DIR`覆盖和显式JSON package_dir保留兼容，前者优先。更换地址后先down，再up；当前task始终使用启动快照。
+
+包内必须带`demo/Config/AirSim/settings.json`、`demo/Saved/SaveGames`三车路线；路由、画质文件都从包内UserDir读取。RPC41451、Drone1、HIL4565、PX4系统6及控制UDP端口沿用验收配置。`scene_args`可显式追加场景启动参数。保留`scene_backend=editor`作为维护者显式兼容选项，需自行配置editor_settings并Play，默认不使用。
+
+每轮证据位于`artifacts/stage5-airsim/<run_id>/`：`scene.log`、`scene.json`（进程、启动参数、包内二进制/配置/路线身份）、`config.json`、`settings.json`、`identity.json`（镜像与源码）、`node-logs/`、`px4-logs/`和`startup.json`。状态入口为上层`state.json`。没有DISPLAY时在图形桌面终端执行，不自动猜测显示器或关闭其他用户进程。
+
+已实测统一up到ready、重复up保持同一PID、down回收窗口及容器；本次没有起飞、开车或模型调用，不能据此宣布Shipping完整任务或长期Vulkan稳定性通过。
+
+## Shipping 常见恢复
+
+| 现象 | 检查与恢复 |
+| --- | --- |
+| `TcpClientPort socket bind failed ... 98` | 先down、关闭手动场景；确认4565/41451无其他实例。无监听但旧连接残留时up会限时等待，禁止用TCP客户端探连HIL。 |
+| 启动显示`drone_1`／SimpleFlight | 加载了其他用户目录settings；统一up显式使用包内Drone1/PX4配置，不直接启动ELF绕过配置。 |
+| 起飞后`No valid saved route`并降落 | 核对三份路线及包内UserDir；Shipping默认用户目录与Development不同。统一runtime已固定UserDir。补齐路线后重启，勿以文件存在替代实际车队启动验收。 |
+| DINO/Jev/Qwen未就绪 | 先检查对应服务地址/进程/代理；模型未就绪时任务不应起飞。不要用增加task预算修复连接问题。 |
+| `phase=failed`或场景退出 | 保留本轮scene.log/节点日志，down后重启；status不是完整任务验收。 |
+| 任务中需要人工恢复 | land会取消后续控制；status确认实际落地；仿真卡死才stop，急停不代表正常降落。 |
+| Vulkan设备丢失／Xid109 | 独立GPU稳定性问题尚未归因，保存场景和内核日志；重打包或ready不能证明修复。 |
+
+迁移中出现的光照、SteamVR/OpenVR链接、Shipping存档路径及包残留问题已记录在Validation，场景源码补丁在`stage5/airsim/scene/`。场景包变更才涉及UE编译/烘焙；Python、prompt和模型配置修改不需要重打包。
+
+## 固定任务与诊断
+
+`stage5/convoy_prompts.json`保存黄皮卡后上方、灰绿色装甲车左侧、白色van正上方三种英文任务。当前执行器只开放`pickup_rear_follow`，不将保存prompt等同于三种任务都通过。默认持续跟随，不用固定10秒作为完成门槛；模型预算、阶段/总timeout仍生效。runtime task可带`--budget`、`--timeout`、`--takeoff-height`及`--takeoff-timeout`；先确认模型/车辆条件，实际悬停后才启动车队。
+
+延迟记录为任务目录中的`latency.jsonl`和`latency-summary.json`，离线重新汇总：
+
+```sh
+.venv/bin/python -m stage5.latency /path/to/task-directory
+```
+
+延迟使用同机单调墙钟；capture_to_command是图像接收到提交控制设定值，不包含此前曝光/传输或实际机体响应。WebUI的命令和服务诊断见后文公共工具章节。
+
+## Gazebo 历史对照：教师准备（PC）
+
+以下Gazebo街区、红色目标和旧单阶段实验用于历史对照，不是AirSim执行入口。Gazebo目标沿环路理想运动，颜色/RGBD跟踪和固定时长验收的结论不能直接用于Shipping黄皮卡任务。
+
+
+
+### AirSim 迁移的固定任务输入
+
+三车、三种跟随方式的英文 prompt 统一维护在 [convoy_prompts.json](../../stage5/convoy_prompts.json)，按 `tasks[].id` 选择并读取 `prompt`，不另维护 TXT 副本。固定任务为 Pickup 后上方跟随、六轮装甲车左侧伴随、白色货车正上方跟随，均持续10秒；方向以目标行驶方向为准，高度相对车顶，只累计到达指定位置后的有效跟随时间。文件中的 `conventions` 应与 prompt 一起作为任务上下文使用。
+
+在 **PC 仓库根目录**可只读提取原文，无需 Docker、模型服务或运行中的场景：
+
+```sh
+python3 -c 'import json; p=json.load(open("stage5/convoy_prompts.json")); print(next(t["prompt"] for t in p["tasks"] if t["id"] == "pickup_rear_follow"))'
+```
+
+Pickup prompt已接入上面的AirSim task CLI，已进入过真实规划/执行，但因目标不在视野内而中止，跟随尚未通过；另两项仍为迁移目标。现有Gazebo红车技能不能直接执行全部三种任务。侧向伴随、正上方跟随需补充适当视角与跟踪验证，不得据此文件宣称对应飞行能力已通过。
 
 需要 Python 3、可访问的 Docker daemon，以及已下载的 Gazebo Harmonic 镜像。当前复用 Stage 2 镜像，无需 API key 或插件编译。课前获取镜像：
 
@@ -19,7 +130,7 @@ docker run --rm --network none --entrypoint gz px4io/px4-sitl-gazebo:latest sim 
 
 RGB/D 页面复用 Stage 2 展示程序，在现有 `uav-computer-ros-humble:local` 镜像内运行，需要 NumPy 和 Pillow。教师按 `develop/docker/Dockerfile` 准备镜像，或用 `camera --camera-image <本地镜像>` 指定具备这两个依赖的镜像。入口检查依赖且不自动下载。Server 使用 Ogre2/EGL 无桌面渲染，本轮使用 Radeon 780M，其他显卡另行验证。
 
-## 学员操作（PC，仓库根目录）
+## Gazebo 历史对照：学员操作（PC，仓库根目录）
 
 ```sh
 python3 stage5/scene.py up
@@ -87,13 +198,13 @@ python3 stage5/scene.py target-reset
 
 `target-stop` 停在当前位置；`target-reset` 停车并回到 `(24,0)`，不移动无人机。完整恢复无人机与车辆初始位置使用 `down` → `up` → 等待 Ready for takeoff → `takeoff`。相机页面与 Gazebo GUI 按前述命令重开。车辆开始移动后，当前悬停无人机仍不会跟随。
 
-配置位于 `stage5/.env`，不提交 Git。新 clone 在 PC 复制模板：
+Stage 5统一读取项目根目录`.env`，不提交Git；不再读取`stage5/.env`，也不把`.env.example`当作运行配置。新clone在PC仓库根目录复制模板，已有`.env`时直接编辑，勿覆盖：
 
 ```sh
-cp stage5/.env.example stage5/.env
+cp .env.example .env
 ```
 
-配置键：`DINO_DETECT_URL`、`DINO_TEXT`、`DINO_TIMEOUT`（秒）。当前模板检测地址为 `http://127.0.0.1:18008/detect`，提示词 `a person. a car.`，RGB 来自 `http://127.0.0.1:8189/rgb`。环境变量优先于文件，CLI 参数优先于两者；文件按 KEY=value 读取，不执行 shell。
+配置键：`DINO_DETECT_URL`、`DINO_TEXT`、`DINO_TIMEOUT`（秒）。当前模板检测地址为`http://127.0.0.1:8000/detect`；本机RGB／深度入口固定为`http://127.0.0.1:8189/rgb`和`/depth`，不由环境文件覆盖。服务配置优先级为CLI参数（该入口支持时）＞shell＞根`.env`；路径相对仓库代码位置解析，不依赖启动目录，dotenv不执行shell命令。
 
 检测服务尚未启动时，先验证临时链路：
 
@@ -162,7 +273,7 @@ python3 -m py_compile stage5/*.py
 uv sync --extra stage5
 ```
 
-成功判据：`.venv` 能导入 `requests`。依赖安装在课前进行，不复制参考项目虚拟环境。配置统一放在根 `.env`，旧 `stage5/.env` 仅作兼容，shell 优先。
+成功判据：`.venv` 能导入 `requests`。依赖安装在课前进行，不复制参考项目虚拟环境。配置统一放在根 `.env`，不再读取旧 `stage5/.env`，shell 优先。
 
 TypeSafe API 配置（PC 根 `.env`）：
 
@@ -245,7 +356,9 @@ python3 stage5/scene.py follow --seconds 60 --target-speed 0.7 --jev-budget 40
 
 独立线程以 50 Hz 发送 Offboard 速度与朝向，避免停车命令或网络操作阻塞发送；主循环超过 300 ms 未更新指令时，发送线程自动改为零速度并保持朝向。整个进程停止时仍由 PX4 的 Offboard 断流策略接管，线程不替代飞控保护。
 
-HTTP 451 若说明 `Typesafe is not available in your region.`，表示当前访问出口被服务拒绝。检查服务可用地区与现有网络配置；若本机已有可用代理，可在本地 `stage5/.env` 显式设置 `JEV_PROXY=http://127.0.0.1:7897`（端口以实际代理为准），不依赖启动终端是否导出代理变量。不配置时沿用 SDK 的终端代理设置，不自动切换网络出口。
+TypeSafe对照遇HTTP451表示当前访问出口被服务拒绝。检查服务可用地区与现有网络配置；本机已有可用代理时可在根`.env`显式设置`JEV_PROXY`。当前统一客户端默认直连，不继承终端HTTP(S)_PROXY，不自动切换网络出口；本地vLLM通常不需要代理。
+
+AirSim 本轮改用 TypeSafe 时，在**实际执行命令的工作树根目录** `.env` 设置 `JEV_BACKEND=typesafe`、`JEV_BASE_URL=https://api.typesafe.ai/v1`、`JEV_MODEL=jev-latest`，密钥使用 `JEV_API_KEY` 或 `TYPESAFE_API_KEY`（前者非空时优先）。本机已验证的代理为 `JEV_PROXY=http://127.0.0.1:7890`，换机须核实实际代理地址；不能只设置终端 HTTPS_PROXY 后假定客户端会使用。修改相邻 `/home/wqy/uav-lesson/.env` 不会自动更新本工作树 `/home/wqy/uav-lesson-stage5/.env`。本轮三类问题的真实代理调用证据见 Validation；不需要启动本地 JEV-9B vLLM 来运行 TypeSafe 后端。
 
 日志 `source=jev` 且 `fresh=true` 才表示新鲜的模型响应；服务错误不会被显示为模型选择 brake。`jev_stats.json` 记录成功调用、尝试和失败次数，`run.json` 保存退出原因；不记录完整响应正文、请求头或凭据。
 
@@ -273,7 +386,7 @@ docker exec uav-stage5-gazebo python3 /scene/follow_eval.py --seconds 68 --outpu
 
 前置条件（PC）：Stage 5 已启动并起飞悬停，红车位于初始视野；DINO、Jev 和 Qwen 服务可用。原 `scene.py follow` 保留直接跟随模式，新 `mission` 使用任务运行器统一管理模型调用、计划与飞行连接。
 
-本地 `stage5/.env`（不提交）配置示例：
+项目根目录`.env`（不提交）中的Qwen配置示例，实际服务地址／模型以根模板和本机部署为准：
 
 ```dotenv
 QWEN_BASE_URL=http://127.0.0.1:18080/v1
@@ -332,6 +445,8 @@ uv run stage5/scene.py mission --budget 10 --timeout 300 --seconds 60 \
 python3 stage5/webui.py --port 8191
 ```
 
+Dashboard是独立服务，AirSim的`up`不会自动启动它；8190实时相机页关闭不影响8191任务灯箱。页面聚焦Qwen任务、DINO检测图与Jev选项，不展示仿真／飞控状态。没有mission时等待任务，不为填充页面调用模型。页面仅绑定127.0.0.1，应在运行UE的PC浏览器中打开；当前端口无监听时先执行上面的webui命令。
+
 浏览器打开 `http://127.0.0.1:8191`。可以先开页面，再在满足前述仿真、起飞悬停与模型服务前提后，从另一 PC 终端启动任务：
 
 ```bash
@@ -342,11 +457,11 @@ uv run stage5/scene.py mission \
 
 默认省略 `--run`，灯箱自动跟随本工作树最新启动的 mission（包含默认临时目录与自定义 `--output`），再次运行无需重启灯箱。若要固定查看历史任务，启动时加 `--run <任务输出目录>`。`--output` 如指定，必须是尚不存在的新目录；未指定时 mission 自动创建临时目录。WebUI 本身不会创建任务目录、起飞或调用模型，不要为看页面而启动真实任务。
 
-预期：顶部 Qwen 在规划、阶段验收、总结时亮起，保留最近返回的决策；流水线按 Qwen 的实际 stages 展示，支持计划版本、attempt 与验收状态。右侧灯箱区分感知、DINO 请求、跟踪、Jev 请求、决策有效性及控制活动，仪表显示观测年龄、行为、风险、额度、进度和 NED 速度。实时 RGB 与 DINO 检测快照可切换，框只叠加到当次送检画面；下方显示配对实时深度伪彩图，红近蓝远，黑色为无效值。当前不提供三维体素视图、历史回放或任务控制按钮。
+预期：顶部 Qwen 在规划、阶段验收、总结请求期间亮起紫色灯箱，保留最近返回的决策；流水线按 Qwen 的实际 stages 展示。验收时通过qwen_stage_id保持被验收阶段高亮，redo继续该阶段，accept后才推进；请求退出后关闭Qwen活动灯。感知区仅展示一张DINO处理图及检测框，等待检测成功后更新；请求期间保留上一张检测图和框，新检测图返回后替换。Jev各组选择题横列一行，绿灯及“已选择”标记模型选择；选项说明可悬停查看，其他执行仪表与Jev次要信息暂不展示。选项从实际问题定义生成，跟随policy变化；新增选择快照需运行更新后的mission。图像未变化时HTTP返回304，不重复发送图片正文。后台感知仍持续取帧，网页不展示实时视频。
 
 状态每约 0.5 秒落盘、页面每约 0.7 秒刷新；图片最多约每秒输出一组，由感知线程处理。图片输出会有额外 CPU/磁盘开销，当前只验证了链路运行，尚无独立开销基准。任务新增 `ui.json`、`preview.json` 为可覆盖快照，原有证据仍保留。只有新版本 mission 会产生这些快照，旧日志不会自动变成实时画面。
 
-页面显示“数据已陈旧”时先检查 mission 进程与输出目录，陈旧状态不会继续点亮工作灯；任务结束显示最终结果。相机空白时检查仿真相机与感知错误字段，DINO 标签页要等待首次检测成功。端口占用可更换 `--port`；Ctrl+C 仅停止 WebUI，不停止 mission。服务只监听 PC 的 `127.0.0.1`，不向局域网公开任务数据。
+页面显示“数据已陈旧”时先检查 mission 进程与输出目录，Jev保留最近一次模型选择及绿灯，直到新选择返回；请求中、失败或连接中断不清空，切换任务时重置。已有选择不表示当前执行授权；任务结束显示最终结果。图像空白时检查DINO请求与感知日志，等待首次检测成功。端口占用可更换 `--port`；Ctrl+C 仅停止 WebUI，不停止 mission。服务只监听 PC 的 `127.0.0.1`，不向局域网公开任务数据。
 
 验证范围：HTTP页面、资源、状态/图像同任务与自动切换已检查；真实任务链路见Validation。完整浏览器视觉回归尚未完成，不能把HTTP检查等同于视觉验收。
 

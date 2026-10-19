@@ -59,6 +59,8 @@ class DecisionClient:
         if self.backend == 'typesafe' and not key:
             raise ValueError('TypeSafe 后端需要 JEV_API_KEY')
         self.timeout = timeout
+        self.request_log_dir = config.get('JEV_REQUEST_LOG_DIR')
+        self.request_number = 0
         self.session = requests.Session()
         self.session.trust_env = False
         if key:
@@ -88,8 +90,15 @@ class DecisionClient:
     def system_one(self, *, state, model, questions):
         deadline = time.monotonic() + self.timeout
         if self.backend == 'typesafe':
-            result = self.post('/systemone', dict(state=state, model=model,
-                questions={key: vars(q) for key, q in questions.items()}), deadline)
+            body = dict(state=state, model=model, questions={key: vars(q) for key, q in questions.items()})
+            if self.request_log_dir:
+                from evidence import write_json
+                self.request_number += 1
+                try:
+                    write_json(Path(self.request_log_dir)/f'jev-request-{self.request_number:04d}.json', body)
+                except OSError:
+                    pass
+            result = self.post('/systemone', body, deadline)
             answers = {}
             for key, q in questions.items():
                 answer = result['answers'][key]

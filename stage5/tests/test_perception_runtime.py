@@ -2,6 +2,10 @@ from pathlib import Path
 import sys
 import threading
 import time
+import base64
+import json
+import struct
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -11,6 +15,40 @@ from test_agent_runtime import Flight
 
 
 class PerceptionTests(unittest.TestCase):
+    def test_preview_is_request_frame_and_rejects_old_generation(self):
+        sensor=Perception.__new__(Perception)
+        sensor.lock=threading.Lock();sensor.generation=2
+        rgb=({'received':123.,'sim_time':7.},b'')
+        depth=({'width':2,'height':2,'step':8},struct.pack('<4f',1,2,3,4))
+        with tempfile.TemporaryDirectory() as directory:
+            sensor.output=Path(directory)
+            sensor.publish_request_preview(rgb,depth,b'exact submitted image',2)
+            path=sensor.output/'preview.json';data=json.loads(path.read_text())
+            self.assertEqual(base64.b64decode(data['rgb']),b'exact submitted image')
+            self.assertEqual(data['source'],'dino_request')
+            self.assertEqual(data['image_sent_to'],'dino')
+            self.assertEqual(data['received'],123.)
+            original=path.read_bytes()
+            sensor.publish_request_preview(rgb,depth,b'old request',1)
+            self.assertEqual(path.read_bytes(),original)
+
+    def test_background_tracking_does_not_refresh_web_images(self):
+        class Client:
+            calls=0
+            def detect(self,*args,**kwargs):
+                self.calls+=1
+                return {'detections':[]},0
+        client=Client();self.patches(client)
+        with patch.object(Perception,'publish_request_preview') as preview:
+            sensor=Perception({'DINO_DETECT_URL':'test','STAGE5_RGB_URL':'test','STAGE5_DEPTH_URL':'test'},Flight())
+            try:
+                until=time.monotonic()+1
+                while sensor.image() is None and time.monotonic()<until:time.sleep(.01)
+                time.sleep(.25)
+                self.assertEqual(client.calls,1)
+                self.assertEqual(preview.call_count,2)  # 送检帧，以及同帧返回的检测框。
+            finally:sensor.close();sensor.thread.join(1)
+
     def patches(self,client):
         rgb=({'received':time.monotonic(),'sim_time':1},b'')
         patches=[patch('agent_runtime.DinoClient',return_value=client),

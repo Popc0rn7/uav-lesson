@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "description": "AirSim 三车跟随任务的固定英文输入；为迁移验收目标，尚未接入执行器或通过飞行验收。",
+  "conventions": {
+    "distance_unit": "m",
+    "duration_unit": "s",
+    "relative_direction": "Relative to the target vehicle's direction of travel.",
+    "height_reference": "Above the target vehicle's roof.",
+    "duration_rule": "Maintain tracking continuously; Jev judges stage outcome within allocated budget and total task timeout."
+  },
+  "tasks": [
+    {
+      "id": "pickup_rear_follow",
+      "target": "lead yellow pickup truck",
+      "following_mode": "rear_above",
+      "behind_m": 8,
+      "above_roof_m": 2,
+      "prompt": "Identify the yellow pickup truck leading the convoy. Follow it from 8 meters behind and 2 meters above its roof continuously.",
+      "continuous": true
+    },
+    {
+      "id": "armored_left_escort",
+      "target": "grey-green armored vehicle in the middle of the convoy",
+      "following_mode": "left_alongside",
+      "left_m": 6,
+      "above_roof_m": 3,
+      "prompt": "Identify the grey-green armored vehicle in the middle of the convoy. Fly alongside it, maintaining a lateral distance of 6 meters to its left and a height of 3 meters above its roof continuously.",
+      "continuous": true
+    },
+    {
+      "id": "white_truck_overhead",
+      "target": "white van at the rear of the convoy",
+      "following_mode": "directly_overhead",
+      "horizontal_offset_m": 0,
+      "above_roof_m": 6,
+      "prompt": "Identify the white van at the rear of the convoy. Track it from directly overhead, maintaining a height of 6 meters above its roof continuously.",
+      "continuous": true
+    }
+  ]
+}

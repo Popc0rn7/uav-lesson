@@ -49,7 +49,7 @@ def project_box(box, response_width, response_height, model):
 
 
 def fuse(response, rgb_meta, depth_meta, depth_bytes, model, max_skew=.05,
-         response_source='http'):
+         response_source='http', depth_policy='conservative'):
     r, d = model['rgb'], model['depth']
     for name, meta, expected in [('RGB', rgb_meta, r), ('depth', depth_meta, d)]:
         if (meta['width'], meta['height']) != (expected['width'], expected['height']):
@@ -71,9 +71,13 @@ def fuse(response, rgb_meta, depth_meta, depth_bytes, model, max_skew=.05,
         if skew > max_skew:
             continue
         mapped = project_box(item['box_xyxy'], response['width'], response['height'], model)
+        target['depth_box_xyxy'] = list(mapped)
         x1, y1, x2, y2 = mapped
         # 整个框保留近处遮挡与远处表面的证据，不只看中心的中位数。
         histogram = Counter()
+        samples = []
+        layer_bounds = {}
+        far_bounds = None
         far_pixels = invalid_pixels = 0
         bx1, bx2 = max(0, math.floor(x1)), min(d['width'], math.ceil(x2))
         by1, by2 = max(0, math.floor(y1)), min(d['height'], math.ceil(y2))
@@ -82,8 +86,16 @@ def fuse(response, rgb_meta, depth_meta, depth_bytes, model, max_skew=.05,
                 value = struct.unpack_from('<f', depth_bytes, y*depth_meta['step']+4*x)[0]
                 if math.isfinite(value) and model['near_m'] < value < model['far_m']:
                     histogram[math.floor(value/.5)] += 1
+                    if depth_policy == 'dominant_layer':
+                        samples.append(value)
+                        b = layer_bounds.setdefault(math.floor(value/.5), [x, y, x+1, y+1])
+                        b[:] = [min(b[0], x), min(b[1], y), max(b[2], x+1), max(b[3], y+1)]
                 elif value == math.inf or math.isfinite(value) and value >= model['far_m']:
                     far_pixels += 1
+                    if depth_policy == 'dominant_layer':
+                        far_bounds = ([x, y, x+1, y+1] if far_bounds is None else
+                                      [min(far_bounds[0], x), min(far_bounds[1], y),
+                                       max(far_bounds[2], x+1), max(far_bounds[3], y+1)])
                 else:
                     invalid_pixels += 1
         box_total = sum(histogram.values()) + far_pixels + invalid_pixels
@@ -105,6 +117,42 @@ def fuse(response, rgb_meta, depth_meta, depth_bytes, model, max_skew=.05,
                         distance_clusters=sorted(clusters, key=lambda c: -c['pixels'])[:6],
                         bin_size_m=.5, depth_limit_m=model['far_m'])
         target['depth_evidence'] = evidence
+        if depth_policy == 'dominant_layer':
+            # 框可信：按有效像素数选最大距离层，超量程与有限层同等参与。
+            layers = [dict(c, kind='finite') for c in clusters]
+            for layer in layers:
+                bounds = [b for k, b in layer_bounds.items()
+                          if layer['min_m'] <= k*.5 < layer['max_m']]
+                layer['depth_pixel_bounds_xyxy'] = [min(b[0] for b in bounds), min(b[1] for b in bounds),
+                                                   max(b[2] for b in bounds), max(b[3] for b in bounds)]
+            if far_pixels:
+                layers.append(dict(kind='too_far', pixels=far_pixels,
+                                   support_fraction=evidence['too_far_fraction'],
+                                   depth_pixel_bounds_xyxy=far_bounds))
+            if not layers:
+                target['status'] = 'insufficient_depth'
+                continue
+            # 平票取近层；不将无效像素解释成距离。
+            selected = max(layers, key=lambda c: c['pixels'])
+            evidence.update(selection_policy='dominant_layer', selected_layer=selected,
+                            has_multiple_layers=len(layers) > 1,
+                            layers=layers,
+                            other_layers=[v for v in layers if v is not selected],
+                            other_layers_note='Potential occluders/background, not identified objects. '
+                                'Retain small layers for avoidance; pixel bounds are envelopes, not masks.')
+            if selected['kind'] == 'too_far':
+                target.update(status='too_far', distance_lower_bound_m=model['far_m'])
+                continue
+            forward = statistics.median(v for v in samples
+                                        if selected['min_m'] <= v < selected['max_m'])
+            cx, cy = (x1+x2)/2, (y1+y2)/2
+            left_m = -(cx-d['cx'])/d['fx']*forward
+            up_m = -(cy-d['cy'])/d['fy']*forward
+            target.update(status='estimated_surface', depth_median_m=forward,
+                          position_m=[forward, left_m, up_m],
+                          range_m=math.sqrt(forward**2+left_m**2+up_m**2),
+                          bearing_right_deg=math.degrees(math.atan2(-left_m, forward)))
+            continue
         if not histogram and evidence['too_far_fraction'] >= .9:
             target.update(status='too_far', distance_lower_bound_m=model['far_m'])
             continue

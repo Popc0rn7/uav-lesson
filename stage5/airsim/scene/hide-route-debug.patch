@@ -1,0 +1,30 @@
+--- a/Source/demo/CarRouteManager.cpp
++++ b/Source/demo/CarRouteManager.cpp
+@@ -6,6 +6,7 @@
+ #include "Components/SceneComponent.h"
+ #include "Components/SplineComponent.h"
+ #include "DrawDebugHelpers.h"
++#include "HAL/IConsoleManager.h"
+ #include "Engine/Engine.h"
+ #include "Engine/World.h"
+ #include "EngineUtils.h"
+@@ -17,6 +18,10 @@
+ #include "WheeledVehicleMovementComponent.h"
+ 
+ DEFINE_LOG_CATEGORY_STATIC(LogCarRoute, Log, All);
++
++static TAutoConsoleVariable<int32> CVarConvoyDrawRoute(
++    TEXT("demo.Convoy.DrawRoute"), 0,
++    TEXT("Draw convoy route lines and endpoint spheres (0: hidden, 1: visible)."));
+ 
+ ACarRouteManager::ACarRouteManager()
+ {
+@@ -715,7 +720,7 @@
+     DisplayTimer += DeltaSeconds;
+     if (DisplayTimer < 0.1f) return;
+     DisplayTimer = 0.f;
+-    if (bDrawRoute)
++    if (bDrawRoute && CVarConvoyDrawRoute.GetValueOnGameThread() != 0)
+     {
+         const FColor Color = State == ECarRouteState::Recording ? FColor::Yellow : IsValid(LeaderManager) ? FColor::Cyan : FColor::Green;
+         // Point positions are vehicle root positions; height offset is for display only.

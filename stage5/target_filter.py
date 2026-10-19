@@ -2,7 +2,7 @@
 import math
 
 
-def filter_candidates(detections, threshold=.35, iou_threshold=.5):
+def filter_candidates(detections, threshold=.35, iou_threshold=.5, *, allowed_words=('car', 'vehicle', 'box'), role='red_vehicle_candidate'):
     results = []
     for detection in detections:
         item = dict(detection)
@@ -14,12 +14,12 @@ def filter_candidates(detections, threshold=.35, iou_threshold=.5):
             reason = 'invalid_score'
         elif len(box) != 4 or not all(isinstance(v, (int, float)) and math.isfinite(v) for v in box) or box[2] <= box[0] or box[3] <= box[1]:
             reason = 'invalid_box'
-        elif not any(word in label.split() for word in ('car', 'vehicle', 'box')):
+        elif not any(word in label.split() for word in allowed_words):
             reason = 'unsupported_semantics'
         elif score < threshold:
             reason = 'low_confidence'
         item.update(accepted=reason is None, rejection_reason=reason,
-                    semantic_role='red_vehicle_candidate' if reason is None else 'rejected')
+                    semantic_role=role if reason is None else 'rejected')
         results.append(item)
     kept = []
     for item in sorted((v for v in results if v['accepted']), key=lambda v: v['score'], reverse=True):

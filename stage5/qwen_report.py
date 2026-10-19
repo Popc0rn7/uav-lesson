@@ -41,7 +41,13 @@ def compact(payload, purpose):
         result['plan_outline'] = [pick(stage, 'id goal skill') for stage in stages]
         reports = payload.get('stage_reports', [])
         result['stage_report'] = report(reports[-1]) if reports else None
+        observation = payload.get('observation') or {}
+        result['current_observation'] = pick(observation,
+            'lost_for_s age_s perception_error active_search_available search_description review_execution')
+        result['current_observation']['target_visible'] = bool(observation.get('detections'))
+        result['current_observation']['tracking_available'] = bool(observation.get('tracking'))
+        result['current_observation']['recent_detection_summary'] = (observation.get('target_memory') or {}).get('summary')
         result['accepted_stage_ids'] = [entry['stage']['id'] for entry in payload.get('accepted', [])]
         result['execution_guidance'] = pick(payload.get('execution_guidance', {}),
-            'remaining_qualified_follow_s estimated_approach_s estimate_source suggested_follow_timeout_s suggested_follow_budget')
+            'remaining_qualified_follow_s estimated_approach_s estimate_source suggested_follow_timeout_s suggested_follow_budget continuous_follow review_execution')
     return rounded(result)

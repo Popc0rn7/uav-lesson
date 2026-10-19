@@ -3,8 +3,8 @@ import socket
 
 import msgpack
 
-def rpc(method,*args,timeout=10):
-    with socket.create_connection(('127.0.0.1',41451),timeout=timeout) as s:
+def rpc(method,*args,timeout=10,host='127.0.0.1',port=41451):
+    with socket.create_connection((host,port),timeout=timeout) as s:
         s.settimeout(timeout)
         s.sendall(msgpack.packb([0,1,method,list(args)],use_bin_type=True))
         u=msgpack.Unpacker(raw=False)

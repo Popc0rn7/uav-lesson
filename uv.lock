@@ -1377,6 +1377,7 @@ stage4 = [
 ]
 stage5 = [
     { name = "numpy" },
+    { name = "pillow" },
     { name = "pymavlink" },
     { name = "socksio" },
     { name = "typesafe-sdk" },
@@ -1393,6 +1394,7 @@ requires-dist = [
     { name = "numpy", marker = "extra == 'stage5'", specifier = ">=2.5.3" },
     { name = "pillow", marker = "extra == 'stage2'", specifier = ">=12.3.0" },
     { name = "pillow", marker = "extra == 'stage4'", specifier = ">=12.3.0" },
+    { name = "pillow", marker = "extra == 'stage5'", specifier = ">=12.3.0" },
     { name = "pymavlink", marker = "extra == 'flight-review'", specifier = ">=2.4.50,<3" },
     { name = "pymavlink", marker = "extra == 'stage2'", specifier = ">=2.4.50,<3" },
     { name = "pymavlink", marker = "extra == 'stage5'", specifier = ">=2.4.49,<3" },

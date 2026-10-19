@@ -93,21 +93,37 @@ def follow_questions(stage=None, simple=False):
     from decision_client import Choice, Score, Noul
     if simple:
         criteria = {key: MANEUVERS[key] for key in stage['allowed_skills']}
+        searching = 'scan_yaw' in criteria
         if 'hold_course' in criteria:
             criteria['hold_course'] = '启用当前stage的后上方位置/速度反馈跟随技能；不是固定航向直飞。'
+            if stage.get('skill') == 'follow_vehicle':
+                criteria['hold_course'] = '启用当前stage指定方式的跟随；有运动方向估计时控制相对位置，方向尚未形成或只有超量程代理时先按当前目标方位水平接近，保持高度，不累计达标。'
+        if stage.get('skill') == 'follow_vehicle':
+            if 'brake' in criteria:
+                criteria['brake'] = '主动保持位置：仅在实际阻挡、需要停止或当前无可用目标几何时选择。unknown且execution_policy=cautious不是已知阻挡，不应仅因此反复刹车。'
+            if 'approach_target' in criteria:
+                criteria['approach_target'] += ' follow_vehicle中有实测位置和运动方向时直接接近指定后上方目标点并持续跟随；几何尚未形成时水平接近并保持高度。'
+        continuous = stage.get('continuous') is True
         return {
-            'maneuver': Choice(instructions='依据当前stage与最新观测选择行为。目标未确认/不可见时保持位置；本版没有主动搜索技能。'
+            'maneuver': Choice(instructions=('依据Qwen当前stage.goal、完成/失败标准与最新观测选择行为；scan_yaw只是可选原地偏航动作。'
+                '是否转向、持续或停止由当前语言指示决定，没有固定圈数、候选出现即停或看不到必须扫描的流程。'
+                'target_memory先给最近4秒未检出候选的帧数/总帧数，再附仅有候选的原始观测及age_s；据此判断历史证据是否孤立，结合当前候选和tracking决定动作，不把一次历史检出视作当前持续可见。'
+                '历史候选不授权跟随。明确too_far表示目标>20米，control_proxy用20米截断代理定位；可按当前指示选择approach_target接近，不需要真实距离或车辆运动方向。已有实测深度时同样可选择approach_target接近至当前阶段水平间距；AirSim按框内像素最多的距离层估计目标深度，超量程层同等参与；depth_evidence.layers和other_layers保留其他距离层及其深度图包围框，可能为遮挡物或背景，不能忽略小层，也不能将包围框当分割掩膜。结合local_space判断路径阻挡；未提供的绕行技能不能声称已执行。NaN不等于超量程。'
+                if searching else '依据当前stage与最新观测选择行为。目标未确认/不可见时保持位置；本版没有主动搜索技能。')+
                 '显式仿真策略允许没有已知阻挡的near-frustum unknown限速跟随。', criteria=criteria),
             'risk': Score(instructions='当前移动风险',criteria=['open street','uncertain but no measured blockage','immediate obstacle']),
             'stage_reason': Choice(instructions='解释当前阶段判断。接近目标时即使valid_follow_s=0也属于approaching，不能据此failed。'
                 'tracking_lost必须有execution_health.failure_facts.tracking_lost证据；blocked必须有blocked证据。',
                 criteria={'observing':'正在观察确认','approaching':'正在接近达标位置','following':'已进入有效跟随',
-                          'achieved':'完成标准已达到','tracking_lost':'持续无可用跟踪且无法主动搜索','blocked':'路径存在实际阻挡'}),
+                          'achieved':'完成标准已达到','tracking_lost':'当前目标不可跟踪，依据本阶段语言失败标准判断','blocked':'路径存在实际阻挡',
+                          **({'searching':'正在按当前阶段指示原地偏航'} if searching else {})}),
             'stage_status': Choice(instructions='只判断当前stage：running继续；done认为目标已达到，交Qwen验收；failed认为无法继续。'
-                'observe_target根据可靠目标观测完成；follow_red_vehicle必须结合progress.valid_follow_s与stage.duration_s，'
-                '没有达到持续时间不要done。接近过程中误差仍大、有效时长为0不是失败；预算和阶段timeout由执行器处理。只有明确失败事实才failed：持续丢失或实际阻挡。目标短暂丢失可running等待，无法重新确认则failed。execution_health给出连续无跟踪时长和恢复能力；没有搜索技能时，不能无限reacquire。语义候选too_far不等于当前可跟踪。observe只需可靠确认，不要等待跟随时长。不计算预算、不决定后续计划。',
+                'observe_target结合Qwen的stage.goal和completion_criteria判断，完成至少需要可靠目标观测；跟随阶段必须结合progress.valid_follow_s与stage.duration_s，'
+                '没有达到持续时间不要done。接近过程中误差仍大、有效时长为0不是失败；预算和阶段timeout由执行器处理。只有明确失败事实才failed：持续丢失或实际阻挡。目标短暂丢失可running等待，无法重新确认则failed。execution_health给出连续无跟踪时长和恢复能力；没有搜索技能时，不能无限reacquire。too_far是已找到且>20米，可使用代理接近，不是目标丢失；代理值不支持精确跟随达标。observe只需可靠确认，不要等待跟随时长。不计算预算、不决定后续计划。',
                 criteria={'running':'继续本阶段','done':'认为当前阶段目标已达到','failed':'无法继续当前阶段'})}
     options = dict(MANEUVERS)
+    options.pop('scan_yaw')
+    options.pop('approach_target')
     options.update(hold_course='启用后上方跟随技能：位置/速度反馈保持8米水平间距、上方2米。'
         '目标已由 DINO 确认并被颜色/RGBD连续跟踪。此动作可前进、减速、后退调整间距，不是盲目朝目标直飞。'
         '当前仿真允许 near-frustum unknown 以1.2m/s限速试探；看到路径阻挡或跟踪丢失则不可跟随。',
@@ -137,6 +153,7 @@ class Flight:
         self.velocity = np.zeros(3)
         self.pose_at = self.q_at = 0
         self.mode = None
+        self.sub_mode = None
         self.armed = False
         self.system = self.component = None
         self.heartbeat_at = self.last_hb = 0
@@ -165,6 +182,7 @@ class Flight:
                     continue
                 self.system, self.component = msg.get_srcSystem(), msg.get_srcComponent()
                 self.mode = (msg.custom_mode >> 16)&255
+                self.sub_mode = (msg.custom_mode >> 24)&255
                 self.armed = bool(msg.base_mode & mavutil.mavlink.MAV_MODE_FLAG_SAFETY_ARMED)
                 self.heartbeat_at = now
             elif msg.get_type() == 'LOCAL_POSITION_NED':
@@ -328,7 +346,7 @@ def target_command(speed):
 
 def allow_follow(judgment, observation):
     risk=judgment.get('risk')
-    return bool(observation and observation.get('confirmed') and judgment.get('actionable')
+    return bool(observation and observation.get('confirmed') and not observation.get('control_proxy') and judgment.get('actionable')
         and judgment.get('effective_maneuver')=='hold_course' and risk is not None and risk < 1.7
         and observation['clearance_m'] > 1.5)
 
@@ -337,7 +355,7 @@ def decision_error(judgment):
     if judgment.get('source')=='error':
         detail=f"Jev调用失败：{judgment.get('error_type')} HTTP={judgment.get('error_http_status')} category={judgment.get('error_category')} {judgment.get('error_message','')}"
         if judgment.get('error_http_status')==451:
-            detail+='；检查 stage5/.env 的 JEV_PROXY 与服务支持地区'
+            detail+='；检查项目根目录 .env 的 JEV_PROXY 与服务支持地区'
         return detail
     return None
 

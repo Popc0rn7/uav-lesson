@@ -73,6 +73,8 @@
 - Stage 5 已提供独立街区、标准机 RGBD（仿真深度上限 20 m）、本地 DINO 与 Jev client。PC MAVLink Offboard 的红色方块车后上方跟随已通过 35/60 秒试验，车速 0.7 m/s，60 秒真值评测水平间距中位数 7.92 m、上方 2.16 m。真实 Qwen3.6-35B-A3B（本地18080/v1，API模型名qwen3.6-35b-a3b）视觉规划→DINO/Jev→PX4单阶段60秒任务通过，32次Jev调用无错误并确认completed，运动后半段水平距离中位数7.95 m、上方2.11 m；使用颜色/RGBD 跟踪和显式仿真未知空间限速策略，未验证搜索、通用目标、复杂绕障、完整一圈或上板。入口与边界见 docs/stage5/Hands-on.md、Validation.md。
 - Stage 5 mission现使用Qwen验收闭环：总budget仅限制Qwen执行请求，总timeout覆盖执行全程，最终额外总结1次；Jev的stage额度由Qwen分配。真实“观察确认→跟随10秒”动态任务通过，3次预算内Qwen、1次总结、20次Jev均成功；达标区间真值水平8.05m、上方2.14m，仍有1.57m横向偏差。redo/modify_stage/modify_plan由受控协议与单元测试验证；55项测试通过。验收期间车辆继续运动，不复位现场；没有搜索或复杂重规划效果保证。架构见docs/stage5/Agent.md。若PC18080不可达，先检查HDC映射；2026-10-15曾仅因转发丢失而不可达，板端worker3086仍ready。
 
+- Stage 5 当前默认已切换为用户接受的 AirSim_Mountains Shipping 包＋PX4/ROS Docker，统一 runtime up/task/status/land/stop/down，不依赖日常 Editor Play。地址为根.env的AIRSIM_MOUNTAINS（Shipping ELF），包和路线是外部运行产物，不随Git分发。先读docs/stage5/Development.md，再按Hands-on当前入口和Agent契约修改；Validation保存静止生命周期与历次失败/更正。当前只开放黄皮卡后上方持续跟随，184项离线回归与统一静止启停通过，不代表复杂遮挡、多轮完整任务、GPU长期稳定性或实机验收；上面Gazebo定时跟随记录为历史对照。
+
 ## 实施原则
 
 1. 优先完成最小端到端链路：PC 仿真 → RoboPi 通信 → 板端控制一个仿真无人机，再扩展算法与多机任务。

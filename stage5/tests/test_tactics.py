@@ -33,6 +33,64 @@ class FakeClient:
 
 
 class TacticsTests(unittest.TestCase):
+    def test_scan_requires_explicit_capability_and_fresh_image(self):
+        for enabled, age, expected in ((True, 0., True), (False, 0., False), (True, 2., False)):
+            actor = self.actor(FakeClient(maneuver='scan_yaw'))
+            value = state()
+            value.update(stage={'allowed_skills': ['scan_yaw']}, execution_health={
+                'active_search_available': enabled})
+            value['observed']['observation_age_s'] = age
+            self.assertTrue(actor.offer(value, time.monotonic()))
+            answer = actor.wait_result()
+            self.assertEqual(answer['source'], 'jev')
+            self.assertEqual(answer['path_allowed'], expected)
+            self.assertEqual(answer['effective_maneuver'], 'scan_yaw' if expected else 'brake')
+
+    def test_proxy_approach_requires_permission_fresh_proxy_and_open_policy(self):
+        for proxy, permission, age, blocked, expected in (
+                (True, True, 0., False, True), (False, True, 0., False, False),
+                (True, False, 0., False, False), (True, True, 2., False, False),
+                (True, True, 0., True, False)):
+            actor = self.actor(FakeClient(maneuver='approach_target'))
+            value = state()
+            value.update(stage={'allowed_skills': ['approach_target'] if permission else ['brake']},
+                         execution_mode='simulation_follow')
+            value['observed'].update(tracking={'control_proxy': proxy, 'confirmed': proxy}, observation_age_s=age)
+            value['observed']['local_space']['motion_candidates']['forward_1m'] = dict(
+                status='blocked' if blocked else 'unknown', execution_policy='cautious')
+            actor.offer(value, time.monotonic())
+            answer = actor.wait_result()
+            self.assertEqual(answer['effective_maneuver'], 'approach_target' if expected else 'brake')
+
+    def test_decision_evidence_is_bound_to_immutable_submitted_observation(self):
+        actor = self.actor(FakeClient(delay=.05))
+        value = state()
+        value['observed'].update(tracking={'confirmed': True}, capture_received_monotonic=123.)
+        value['progress'] = {'valid_follow_s': 7.}
+        value['execution_health'] = {'failure_facts': {'blocked': True}}
+        actor.offer(value, time.monotonic())
+        value['observed']['tracking']['confirmed'] = False
+        value['progress']['valid_follow_s'] = 0.
+        value['execution_health']['failure_facts']['blocked'] = False
+        evidence = actor.wait_result()['decision_evidence']
+        self.assertTrue(evidence['tracking_confirmed'])
+        self.assertEqual(evidence['valid_follow_s'], 7.)
+        self.assertTrue(evidence['failure_facts']['blocked'])
+        self.assertEqual(evidence['capture_received_monotonic'], 123.)
+
+    def test_new_target_triggers_request_without_waiting_for_periodic_interval(self):
+        actor = self.actor(FakeClient(), budget=5)
+        actor.hz = .01
+        value = state()
+        value['observed']['target_response_source'] = 'dino_rgbd_current_frame'
+        self.assertTrue(actor.offer(value, time.monotonic()))
+        actor.wait_result()
+        value['observed']['tracking'] = {'confirmed': True}
+        self.assertTrue(actor.offer(value, time.monotonic()))
+        actor.wait_result()
+        value['observed']['tracking']['target_ned'] = [20, 0, 0]
+        self.assertFalse(actor.offer(value, time.monotonic()))
+
     def actor(self, client, budget=2, ttl=1.5):
         actor = Tactician({'JEV_CALL_HZ':'1000', 'JEV_CALL_BUDGET':str(budget),
                           'JEV_TIMEOUT':'1', 'JEV_RETRY_BASE_S':'.1', 'JEV_STALE_AFTER_S':str(ttl)}, client=client)

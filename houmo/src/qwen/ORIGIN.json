@@ -1,0 +1,22 @@
+{
+  "upstream": "postmo-modelzoo/qwen_ohos_infer",
+  "head": "9121ddac32d0d1a7317103a592b22f955d656050",
+  "note": "上游目录未跟踪；Python 按课程已获取运行包吸纳，原生 main.cc 按上游当前源码吸纳；本次复用旧 ELF，未重编译。",
+  "sha256": {
+    "CMakeLists.txt": "041ae3ba3f605bf31c214aea3af5037505f277d0981710c461c54d30bf306ae7",
+    "LICENSE": "c24d7bf1acbc39b7e94f7a3ad94309495a15e0bbc0f25e6e5e32730cb718da69",
+    "main.cc": "d652a81b8e34189bb86183c40e15f3ecc114ead01190c43c8b7750d5e4583b29",
+    "models.json": "69fa02f1c224c80956a1439aa0f604e26b965ef2ff0447925f2f2eb8e8a9df8d",
+    "prepare_embedding.py": "986d7c0f176cee34dad5d16f10077137f67cce4ed8e9fb214654c49e1b35140c",
+    "requirements-server.txt": "d269d66be03152ce0f7c051f01370cc0a8f33a6f44acb27481978e90e0608e18",
+    "run.py": "0e4b9aa66bd61b3adb99fe9380a09fa776cebe8612a4a45c845bcfe9c4b087a5",
+    "run.sh": "d1ff579f5eba88343b141b6d0221972240ad9f41189f87ca260b943e5c0c19ff",
+    "server.py": "1333f903f3df373fd47566a9f7a57e6d572189c0a6c25cea4a4fd349367fec5e",
+    "tests/board_test.py": "ad6f4ef4cbc79f55d447854ee2eb168acebab54283d043bee619dad8df2ca006",
+    "tests/test_run_control.py": "493a3f5186b26d195f2b0677ca7d58b530cd9c94017ef4ceb112a3e37c19b1bf",
+    "tests/test_server.py": "6614c9db47511cc0cb23d9c2756ba3488309c45b543984d8d5be6324729799fa",
+    "tests/test_server_startup.py": "3bbc89c5df3fa2d3de639e66cc8466bdd3deec186f5213776d145cd72b5fa556",
+    "tests/test_vision_http.py": "9b78382ccb1e8f2717bdd690b16ec0ef43a7d797c5610231a60f00e58b348b50",
+    "vqa_client.py": "5e6d85f68ea39d2e22967528dbd42847b4bdfdcf4d54f5975e7141b8729afb66"
+  }
+}

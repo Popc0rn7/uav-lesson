@@ -37,12 +37,13 @@ unset LD_PRELOAD
 cd "$app_dir"
 # 模型服务与 ROS 桥分开：HTTP 只监听本板，PC 仍通过 DDS 收发。
 infer_dir="$app_dir/qwen_infer"
+qwen_port=$(python3 -B "$app_dir/service_config.py" QWEN_PORT)
 python3 -c 'import uvicorn, h11' || exit 1
 status="$(sh "$infer_dir/run.sh" --status)" || exit 1
 started=0
 case "$status" in
     RUNNING*|FOREGROUND*) ;;
-    *) sh "$infer_dir/run.sh" --serve --background --model qwen3.6-35b-a3b --host 127.0.0.1 --port 8080 || exit 1; started=1 ;;
+    *) sh "$infer_dir/run.sh" --serve --background --model qwen3.6-35b-a3b --host 127.0.0.1 --port "$qwen_port" || exit 1; started=1 ;;
 esac
 if ! python3 -B "$app_dir/backend.py"; then
     [ "$started" -eq 0 ] || sh "$infer_dir/run.sh" --stop

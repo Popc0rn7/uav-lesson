@@ -16,7 +16,6 @@ wheels/
 
 # 上游运行产物、模型缓存和运行状态
 /artifacts/
-/robopi/stage1/qwen_infer/
 *.pid
 *.lock
 !uv.lock
@@ -34,3 +33,10 @@ wheels/
 
 # Stage 5 场景由 generate_world.py 生成
 /stage5/street.sdf
+
+/houmo/build/
+/houmo/deploy/
+
+/houmo/models/
+/houmo/deps/
+/.board-work/

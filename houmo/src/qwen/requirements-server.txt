@@ -1,0 +1,2 @@
+# Runtime-only dependency; installed by the user, not bundled in dist/.
+uvicorn==0.54.0

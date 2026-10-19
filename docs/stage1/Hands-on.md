@@ -174,7 +174,7 @@ hdc -t '<connect-key>' fport ls
 hdc -t '<connect-key>' fport tcp:18080 tcp:8080
 curl --noproxy '*' http://127.0.0.1:18080/health
 curl --noproxy '*' http://127.0.0.1:18080/v1/models
-python3 robopi/stage1/qwen_infer/vqa_client.py \
+python3 houmo/src/qwen/vqa_client.py \
   --image /path/on/pc/image.png --prompt '请描述图片中的主要物体。'
 ```
 
@@ -245,3 +245,11 @@ python3 stage1/verify.py --target '<本次确认的connect-key>' \
 同日 Stage 3 飞行测试结束后已恢复本项目服务，worker PID=7368/start_ticks=754599；以太网 ROS 两次文本（0.59/0.50 秒）和空请求再次通过，前后 worker 一致。当前健康 ready，HDC 本次 18080→8080 映射可用；证据 `artifacts/stage1-validation/restored-after-flight.json`。该临时网络/转发与服务状态不等于开机自动恢复配置。
 
 后续 Stage 3 profile 结束及 USB/以太网恢复后，再次恢复模型/桥，worker PID=8714/start_ticks=1433105；健康 ready、以太网 ROS 两次文本约 0.60/0.50 秒、空请求拒绝与常驻复用通过，证据 `artifacts/stage1-validation/restored-after-profile.json`。HDC 18080→8080 本次映射已恢复。
+
+## Grounding DINO 检测服务
+
+独立于 Qwen 的 360p 板端检测接入见 [准备、上传与调用](GroundingDINO.md)。目前完成本地交付检查；课程固定路径的实际部署和 Qwen 同板调用尚待验收。
+
+### 2026-10-19 本地交付目录整理
+
+Stage 1 厚摩源码和编译入口统一迁入 `houmo/src/`，编译产物进入忽略 Git 的 `houmo/build/`，完整上传内容从源码装配到 `houmo/deploy/`，详见 [厚摩交付](../../houmo/README.md)。本次完成本地装配与清单检查，没有重编译或上板运行。上文 2026-10-16 的证据属于当时布局；板端目标路径保持原值，新装配包仍需实际回归。

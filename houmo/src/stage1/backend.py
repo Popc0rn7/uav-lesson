@@ -5,7 +5,9 @@ import time
 from urllib.error import HTTPError, URLError
 from urllib.request import build_opener, ProxyHandler, Request
 
-INFER_URL = 'http://127.0.0.1:8080'
+from service_config import read_ports
+
+INFER_URL = f"http://127.0.0.1:{read_ports()['QWEN_PORT']}"
 TIMEOUT_SECONDS = 310
 STARTUP_SECONDS = 330
 MAX_RESPONSE_BYTES = 1024 * 1024
@@ -65,13 +67,13 @@ def wait_ready():
                 health = read_json(response)
             if health.get('status') == 'ready':
                 if health.get('model') != 'qwen3.6-35b-a3b':
-                    raise RuntimeError('8080 服务模型不是 Stage 1 要求的 qwen3.6-35b-a3b，请检查已有服务')
+                    raise RuntimeError(f'{INFER_URL} 服务模型不是 Stage 1 要求的 qwen3.6-35b-a3b，请检查已有服务')
                 pid = health.get('worker_pid')
                 if type(pid) is not int or pid <= 1:
                     raise RuntimeError('常驻服务 worker_pid 无效')
                 expected = Path('/data/local/workspace/stage1/qwen_infer/qwen_ohos_infer').resolve()
                 if Path(f'/proc/{pid}/exe').resolve() != expected:
-                    raise RuntimeError('8080 端口属于其他推理部署，不复用该服务')
+                    raise RuntimeError(f'{INFER_URL} 端口属于其他推理部署，不复用该服务')
                 print(f'模型已就绪，worker_pid={pid}', flush=True)
                 return
         except (URLError, OSError, ValueError) as error:

@@ -19,7 +19,7 @@ PC 运行 PX4 SITL 与 Gazebo／AirSim 仿真，以及 QGroundControl、GUI 和�
 
 接续开发先读 [开发路线：上游复现 → 双 Docker → AirSim → RoboPi](develop/README.md)，了解每步替换的层、代码入口、验收条件和已知陷阱。Gazebo 双 Docker 配置入口如下；当前 AirSim 与板端操作入口见文末。在 PC 仓库根目录运行 `python3 develop/lesson.py list` 查看已接入实验，`python3 develop/lesson.py up --dry-run` 查看启动命令。
 
-- Stage 1：ROS 常驻模型聊天链路，PC 入口位于 `stage1/`，板端文件位于 `robopi/stage1/`；上游运行产物和模型需课前获取，操作见 [Hands-on](docs/stage1/Hands-on.md)。
+- Stage 1：ROS 常驻模型聊天链路，PC 入口位于 `stage1/`，板端源码与编译入口位于 `houmo/src/`，上传包统一装配到 `houmo/deploy/`（见 [厚摩交付](houmo/README.md)）；目标 ELF 和模型需课前准备，操作见 [Hands-on](docs/stage1/Hands-on.md)。
 - Stage 2：PC PX4/Gazebo 标准机 `x500_experiment`（Orbbec Gemini 2 RGBD＋MID-360S 几何近似），QGC 操作、四图展示和排障见 [Hands-on](docs/stage2/Hands-on.md)。用户已确认展示可用，改装后的完整飞行仍待验收；相机配置实测见 [配置验证](docs/stage2/Hands-on.md#相机配置验证2026-10-10)。
 - Stage 3：SUPER＋PX4/GNSS；Gazebo 无附加标记走廊 2 m/s XYZ 往返与三窗口已验收，FAST-LIO2 保留为显式对照。当前标准主线为 AirSim，低速短程／树林往返及 RoboPi 原生 1 m/s 短程／forest1 往返已通过，完整 AB 长任务未通过；[Gazebo 操作](docs/stage3/Hands-on.md)、[Gazebo 验证](docs/stage3/Validation.md)、[AirSim 操作](stage3/super/airsim/README.md)、[板端验证](docs/stage3/RoboPi-validation.md)。统一算法对照、Stage 3 视觉接入和聊天 GUI 尚未完成。
 

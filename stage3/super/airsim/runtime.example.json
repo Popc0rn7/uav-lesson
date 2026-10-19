@@ -1,5 +1,5 @@
 {
-  "scene_dir": "/mnt/disk1/wqy/Airsim-Scene/AirSimNH/LinuxNoEditor",
+  "scene_dir": "${AIRSIM_SCENE_DIR}",
   "binary": "AirSimNH/Binaries/Linux/AirSimNH",
   "scene_args": [
     "AirSimNH",

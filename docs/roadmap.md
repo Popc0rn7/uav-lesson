@@ -6,7 +6,7 @@
 
 ## 1. 熟悉硬件 · 20 min
 
-板端准备流程见 [AGENTS.md](AGENTS.md)。现有推理产物在 `robopi/stage1/qwen_infer/`，模型在 `artifacts/models/`；已准备标准话题的 ROS 聊天节点与 PC 命令行客户端，流程见 [Hands-on](stage1/Hands-on.md)；板端与 PC 局域网标准消息收发已验证，正常问题触发板端 NPU 推理并回到 PC 的链路已验证，以下待办保持未完成。
+板端准备流程见 [AGENTS.md](AGENTS.md)。源码、编译入口与上传包按 [厚摩交付](../houmo/README.md) 分别集中到 `houmo/src/`、`houmo/build/`、`houmo/deploy/`，模型在 `artifacts/models/`；已准备标准话题的 ROS 聊天节点与 PC 命令行客户端，流程见 [Hands-on](stage1/Hands-on.md)；板端与 PC 局域网标准消息收发已验证，正常问题触发板端 NPU 推理并回到 PC 的链路已验证，以下待办保持未完成。
 
 1. 认识 PC 仿真飞控与 RoboPi 算力板的分工，连接硬件并进入 `hdc shell`。
 2. 运行脚本，观察 ROS 包如何交叉编译、传输并在板端运行。

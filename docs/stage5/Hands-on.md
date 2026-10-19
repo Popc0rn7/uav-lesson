@@ -93,7 +93,7 @@ python3 stage5/scene.py target-reset
 cp stage5/.env.example stage5/.env
 ```
 
-配置键：`DINO_DETECT_URL`、`DINO_TEXT`、`DINO_TIMEOUT`（秒）、`STAGE5_RGB_URL`。当前模板检测地址为 `http://127.0.0.1:18008/detect`，提示词 `a person. a car.`，RGB 来自 `http://127.0.0.1:8189/rgb`。环境变量优先于文件，CLI 参数优先于两者；文件按 KEY=value 读取，不执行 shell。
+配置键：`DINO_DETECT_URL`、`DINO_TEXT`、`DINO_TIMEOUT`（秒）。当前模板检测地址为 `http://127.0.0.1:18008/detect`，提示词 `a person. a car.`，RGB 来自 `http://127.0.0.1:8189/rgb`。环境变量优先于文件，CLI 参数优先于两者；文件按 KEY=value 读取，不执行 shell。
 
 检测服务尚未启动时，先验证临时链路：
 
@@ -119,7 +119,7 @@ mock 使用用户提供的 812×538 固定示例框，只验证响应处理，�
 
 机载取帧现在默认同时获取 RGB 和深度，在提交检测之前保存两路快照，不用检测完成后的新深度去配旧框。沿用前述 `dino_client.py` 命令，额外输出 `depth.f32`（小端 float32，按 step 分行）、`depth_capture.json`、`calibration.json` 和 `targets.json`；SVG 标签增加距离或 `no depth`。本地图像 `--image` 自动禁用深度融合，`--no-depth` 可仅运行原 RGB 检测。
 
-`.env` 新增 `STAGE5_DEPTH_URL=http://127.0.0.1:8189/depth`、`RGBD_MAX_SKEW_S=0.05` 和 `RGBD_MAX_AGE_S=0.5`。两帧仿真时间差需不超过 50 ms，无法配对时失败并报错；检测结束后保留观测年龄，超过 0.5 秒则标记不可用于控制。当前接收桥只有最新帧，这里是有限时间差配对，尚无严格同步队列。
+RGB/depth 固定使用本机 8189 端口的 `/rgb` 与 `/depth`，不从 `.env` 读取；DINO CLI 仍可用 `--source`、`--depth-source` 指定离线诊断来源。`.env` 保留 `RGBD_MAX_SKEW_S=0.05` 和 `RGBD_MAX_AGE_S=0.5`。两帧仿真时间差需不超过 50 ms，无法配对时失败并报错；检测结束后保留观测年龄，超过 0.5 秒则标记不可用于控制。当前接收桥只有最新帧，这里是有限时间差配对，尚无严格同步队列。
 
 标定从当前 `stage2/models/x500_experiment/model.sdf` 读取，要求两路传感器共光心、同朝向。先把检测响应框恢复到 RGB 原图坐标，再利用焦距和主点映射到深度图。方形像素的针孔内参为 `fx=fy=width/(2*tan(hfov/2))`、`cx=width/2`、`cy=height/2`，不能直接按分辨率比例把 RGB 框复制到深度图。换成实机、有不同光心或畸变时另行标定。
 
@@ -154,7 +154,7 @@ python3 -m py_compile stage5/*.py
 
 ## Jev 决策 client（PC）
 
-`stage5/tactics.py` 改编自本机 `~/airos/robopi/jev-drone/tactics.py`（参考提交 `974b47378c14c6dcf7d11f7c813fba0f5f4d8b6a`），保留单 worker、单槽队列、限频、调用预算、场景指纹缓存和异步结果读取。MIT 版权与许可随 `stage5/LICENSE.jev-drone` 保存。当前使用官方 TypeSafe SDK，和 Stage 3 OpenRouter Jev 示例为不同入口。
+`stage5/tactics.py` 改编自本机 `~/airos/robopi/jev-drone/tactics.py`（参考提交 `974b47378c14c6dcf7d11f7c813fba0f5f4d8b6a`），保留单 worker、单槽队列、限频、调用预算、场景指纹缓存和异步结果读取。MIT 版权与许可随 `stage5/LICENSE.jev-drone` 保存。当前由 `decision_client.py` 通过 HTTP 适配 TypeSafe System One 和 JEV-9B vLLM，两者共用问题定义与结果检查。
 
 教师准备（PC，仓库根目录）：
 
@@ -162,9 +162,35 @@ python3 -m py_compile stage5/*.py
 uv sync --extra stage5
 ```
 
-成功判据：`.venv` 能导入 `typesafe_sdk`。当前锁定 typesafe-sdk 0.7.4；socksio 1.0.0 支持本机 SOCKS 代理。依赖安装在课前进行，不复制 MuJoCo 或参考项目虚拟环境。
+成功判据：`.venv` 能导入 `requests`。依赖安装在课前进行，不复制参考项目虚拟环境。配置统一放在根 `.env`，旧 `stage5/.env` 仅作兼容，shell 优先。
 
-本机已把参考目录的 Jev 密钥合并到忽略的 `stage5/.env`，文件权限 0600，未覆盖 DINO 配置。新 clone 需自行配置 `TYPESAFE_API_KEY` 或 `JEV_API_KEY`；可设置 `TYPESAFE_BASE_URL`。不要把密钥写进任务、状态或结果文件。其他配置：`JEV_MODEL=jev-latest`、`JEV_CALL_HZ=1`、`JEV_CALL_BUDGET=10`、`JEV_TIMEOUT=10`、`JEV_STALE_AFTER_S=1.5`。单轮异常也计入预算，SDK 自动重试关闭。
+TypeSafe API 配置（PC 根 `.env`）：
+
+```dotenv
+JEV_BACKEND=typesafe
+JEV_BASE_URL=https://api.typesafe.ai/v1
+JEV_MODEL=jev-latest
+JEV_API_KEY=<自己的密钥>
+```
+
+使用原生 `POST /v1/systemone`，单次发送所有 typed questions；旧 `TYPESAFE_API_KEY` / `TYPESAFE_BASE_URL` 仍兼容。问题、答案及概率格式以 [TypeSafe API](https://docs.typesafe.ai/api) 为准。
+
+JEV-9B vLLM 配置（PC 根 `.env`，服务事先单独准备）：
+
+```dotenv
+JEV_BACKEND=vllm
+JEV_BASE_URL=http://127.0.0.1:18081/v1
+JEV_MODEL=jev-decision
+JEV_API_KEY=
+JEV_DECISION_HEAD=/path/to/JEV-9B/adapter_vllm/decision_head.json
+JEV_CALIBRATION=/path/to/JEV-9B/calibration.json
+```
+
+两个小 JSON 必须与服务端 adapter 来自同一固定模型版本，相对路径以仓库根目录为基准；不会自动下载权重。模型来源为独立开源复现 [autotrust/JEV-9B](https://huggingface.co/autotrust/JEV-9B)，并非 TypeSafe 官方开放权重。按该模型卡准备 vLLM，须启用 `--enable-lora --max-lora-rank 32 --lora-modules jev-decision=/path/to/JEV-9B/adapter_vllm --logprobs-mode processed_logprobs`；`JEV_MODEL` 对应 LoRA 注册名。实际 vLLM 版本需支持 Qwen3.5、lm_head LoRA、allowed_token_ids 和 processed_logprobs；模型卡参考版本不能替代本机服务实测。
+
+本地适配调用 `/v1/completions`，每题一个 token，读取允许 token 的完整 logprobs，加 head bias、除校准温度后归一化。缺 logprobs、非有限数值或非法维度按请求失败处理；不退回聊天生成。Choice 支持 2～16 个选项，置信度按 [TypeSafe 公式](https://docs.typesafe.ai/confidence)计算。Noul 使用原生二分类；课程三档风险以有序 Choice 的概率期望映射到 0～2，并非 JEV-9B 原生六档 Score，与 TypeSafe 的风险输出需分别验收。
+
+一轮所有问题共用 `JEV_TIMEOUT` 墙钟预算。TypeSafe 一轮一个 HTTP 请求，vLLM 一轮按题数发送多个请求；`JEV_CALL_BUDGET` 仍计逻辑决策轮数，失败轮也计数，不表示底层 HTTP 请求数。原有限频、缓存、过期、退避、阶段结果检查与控制约束保留，不自动跨后端重试。可选 `JEV_PROXY` 显式配置代理，默认直连。其他参数仍为 `JEV_CALL_HZ`、`JEV_CALL_BUDGET`、`JEV_TIMEOUT`、`JEV_STALE_AFTER_S`。更换后端不能复用旧任务结果宣称新闭环通过。
 
 只检查接线，不调用 Jev（PC）：
 
@@ -190,7 +216,7 @@ Jev 输入保留所有 DINO 候选、框内距离簇、超量程状态、体素�
 
 输出为建议，不调用 PX4。需要移动的行为另检查对应候选路径必须 clear，blocked/unknown 时 `effective_maneuver=brake`，保留 Jev 原始选择和否决原因。`reacquire` 仅表示继续观察意图，不是盲目移动许可。结果年龄从源观测开始计算，超过 TTL 则 stale/actionable=false；这个标记不是完整飞行验收。
 
-没有 SDK 或代理依赖时执行教师准备命令；缺密钥时补本地 `.env`。模型或网络异常输出 error_type，不把 SDK 异常正文写入日志；本轮建议降级，进程返回非零，保留本地结果。已有过期观测不会重新调用 Jev，可用 `--observation <感知目录> --dry-run` 检查它的状态结构；正常在线运行请使用 `--observe`。
+没有 HTTP 或代理依赖时执行教师准备命令；缺密钥时补本地 `.env`。模型或网络异常输出 error_type，不把请求或响应正文写入日志；本轮建议降级，进程返回非零，保留本地结果。已有过期观测不会重新调用 Jev，可用 `--observation <感知目录> --dry-run` 检查它的状态结构；正常在线运行请使用 `--observe`。
 
 ## Jev 驱动车尾后上方跟随（PC）
 

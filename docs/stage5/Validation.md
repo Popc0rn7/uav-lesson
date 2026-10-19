@@ -282,3 +282,9 @@ Qwen预算内3次＋额外总结1次：
 代码整理抽出共用FatalControl，避免执行器和仿真控制依赖任务运行器模块；统一单写者JSON快照的原子替换；保留关闭资源前后的最终UI发布，删除重复赋值；灯箱拆分文件/事件读取、数据组装与HTTP响应，容忍事件流正在追加的半行，不再因此清空已有事件。整理仅涉及模块边界与证据/展示读写，不改变控制参数、任务协议或模型提示词。
 
 验证：83项单元测试、Python/JavaScript语法通过；新增回归覆盖无效数据/替换失败保留旧证据、临时文件清理、半行事件不隐藏已有事件。未调用真实模型、未重新执行飞行，暂停/飞行效果仍以前述真实任务证据为准。
+
+## 2026-10-18：Jev 双后端与环境配置（离线回归）
+
+Stage 5 增加统一 HTTP 决策适配，TypeSafe 使用原生 `/v1/systemone`，JEV-9B vLLM 使用 `/v1/completions` 的 System 1 LoRA、token logprobs、head bias 和校准温度。Qwen 继续使用 Chat Completions。配置和服务前提统一见 [Hands-on](Hands-on.md#jev-决策-clientpc)。RGB/depth 固定本机 8189，不再从环境变量选择来源。
+
+本轮 `.venv/bin/python -m unittest discover -s stage5/tests -q`：89 项通过，含 6 项新增适配测试；语法和 diff 检查通过。模拟响应验证 TypeSafe 原生请求、vLLM token 约束/概率还原/校准、三档风险期望、缺 logprobs 拒绝、HTTP 错误状态及固定 RGBD 来源。未连接真实 JEV-9B 服务、未调用 TypeSafe 付费 API、未启动仿真或飞行。没有生成新 run ID / ULog；历史 TypeSafe 飞行证据不作为新 HTTP 适配或 JEV-9B 的验收。下一步先验证同一输入下两后端的实际消息、延迟和决策输出，再独立验收低速任务；本地三档风险的 Choice 映射需单独评估，不能宣称与原生 Score 效果等价。

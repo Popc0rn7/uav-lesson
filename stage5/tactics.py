@@ -25,7 +25,7 @@ PATHS = {'hold_course': 'forward_1m', 'gap_left': 'forward_left_1m',
 
 
 def questions():
-    from typesafe_sdk import Choice, Noul, Score
+    from decision_client import Choice, Noul, Score
     return {
         'maneuver': Choice(instructions='依据用户任务、目标候选和局部空间，选择下一项战术行为。'
             'unknown 不是 clear；too_far 是超过量程的信息，不是目标丢失。'
@@ -61,7 +61,7 @@ class Tactician:
         self.budget = int(config.get('JEV_CALL_BUDGET', '10'))
         self.timeout = float(config.get('JEV_TIMEOUT', '10'))
         self.ttl = float(config.get('JEV_STALE_AFTER_S', '1.5'))
-        self.model = config.get('JEV_MODEL', 'jev-latest')
+        self.model = config.get('JEV_MODEL') or ('jev-decision' if config.get('JEV_BACKEND') == 'vllm' else 'jev-latest')
         self.retry_base = float(config.get('JEV_RETRY_BASE_S', '1'))
         self.max_failures = int(config.get('JEV_MAX_CONSECUTIVE_ERRORS', '3'))
         self._secrets = [v for k,v in config.items() if v and any(s in k.upper() for s in ('KEY','TOKEN','SECRET','PASSWORD','PROXY'))]
@@ -70,18 +70,9 @@ class Tactician:
         if not all(math.isfinite(v) and v > 0 for v in (self.hz, self.timeout, self.ttl)) or self.budget < 1:
             raise ValueError('Jev 频率、预算、超时和 TTL 必须为正数')
         if client is None:
-            from typesafe_sdk import TypeSafeClient, RetryPolicy
-            key = config.get('TYPESAFE_API_KEY') or config.get('JEV_API_KEY')
-            if not key:
-                raise ValueError('stage5/.env 缺少 TYPESAFE_API_KEY 或 JEV_API_KEY')
-            options = dict(api_key=key, timeout=self.timeout, retry=RetryPolicy(max_retries=0))
-            if config.get('TYPESAFE_BASE_URL'):
-                options['base_url'] = config['TYPESAFE_BASE_URL']
-            if config.get('JEV_PROXY'):
-                import httpx2
-                # 显式配置不依赖调用者终端是否导出代理变量。
-                options['http_client'] = httpx2.Client(proxy=config['JEV_PROXY'], trust_env=False, timeout=self.timeout)
-            self.client, self.questions = TypeSafeClient(**options), question_set or questions()
+            from decision_client import DecisionClient
+            self.client = DecisionClient(config, self.timeout)
+            self.questions = question_set or questions()
         else:
             self.client, self.questions = client, {}
         self.attempts = self.calls = self.errors = 0
@@ -258,4 +249,5 @@ class Tactician:
     def stats(self):
         with self._lock:
             return dict(calls=self.calls, attempts=self.attempts, errors=self.errors,
-                        call_budget=self.budget, model=self.model)
+                        call_budget=self.budget, model=self.model,
+                        backend=getattr(self.client, 'backend', 'injected'))

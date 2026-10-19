@@ -90,7 +90,7 @@ def forward_clearance(depth, model):
 
 
 def follow_questions(stage=None, simple=False):
-    from typesafe_sdk import Choice, Score, Noul
+    from decision_client import Choice, Score, Noul
     if simple:
         criteria = {key: MANEUVERS[key] for key in stage['allowed_skills']}
         if 'hold_course' in criteria:

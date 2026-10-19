@@ -175,7 +175,8 @@ def up(args):
         raise RuntimeError('同名容器已存在；拒绝接管')
     process_manager.check_ports()
     package = STATE_DIR/'package-realtime-sitl'
-    executable = prepare(args.scene, package, disable_lockstep=True)
+    executable = prepare(args.scene if args.scene is not None else process_manager.scene_package(process_manager.scene_binary('AIRSIM_RACE')),
+                         package, disable_lockstep=True)
     owner = uuid.uuid4().hex
     run_dir = STATE_DIR/owner
     run_dir.mkdir()
@@ -298,7 +299,7 @@ def up(args):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('action', choices=['up', 'status', 'down', 'stop', 'land', 'test', 'reset-race', 'start-race'])
-    parser.add_argument('--scene', type=Path, default=ROOT/'submodules/drone-race/ADRL')
+    parser.add_argument('--scene', type=Path, default=None)
     parser.add_argument('--image', default='px4io/px4-sitl-gazebo:latest')
     parser.add_argument('--display', help='up：显式指定 PC X11 显示器')
     parser.add_argument('--settings', type=Path, default=HERE/'settings.json',

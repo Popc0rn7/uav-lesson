@@ -39,19 +39,6 @@ PC 运行 PX4 SITL 与 Gazebo／AirSim 仿真，以及 QGroundControl、GUI 和�
 
 主入口在 `stage2/`；`models/x500_experiment/` 负责整机组合与 RGBD，`models/mid360s/` 维护雷达参数，`configure_mid360s.py` 提供三档扫描预算。`sensor_receiver.py`/`sensor_web.py` 负责接收与网页，`rviz_cloud_bridge.py` 是雷达和深度点云共用的 ROS 处理器。深度点云为 [补充实验](docs/stage2/Hands-on.md#调参和补充实验)。近似范围与官方规格对照见 [MID-360S](docs/stage2/MID-360S.md)。
 
-## Stage 3 文本示例
-
-在 PC 上使用 Python 3.12+ 和 uv：
-
-```sh
-uv sync
-cp .env.example .env
-# 编辑 .env，填入自己的 OPENROUTER_API_KEY
-uv run stage3/demo.py '这个产品太好用了！'
-```
-
-示例通过网络调用 API，并输出正面情绪概率、情感分类和满意度。需要有效 API key，调用可能产生费用。`stage3/jev.py` 的接口与默认模型以当前代码为准；本次初始化未验证线上服务。
-
 ## 后续实施顺序
 
 先建立可重复的 PC 仿真基线与 RoboPi 开发部署流程，再打通板端控制单架仿真无人机的链路。随后加入传感器可视化、竞速赛道和排行榜，最后逐项复现自主飞行、视觉、多机与大模型任务。
@@ -61,3 +48,23 @@ uv run stage3/demo.py '这个产品太好用了！'
 板端开发与交付统一见 [robopi/AGENTS.md](robopi/AGENTS.md)，实际板端文件放在 `robopi/stageN/`；仓库 `skills/` 维护配套 Codex skills。Stage 1 新布局已完成部署回归，Stage 3 的板端短程链路已验证，完整 AB 任务仍待验收。
 
 当前 Stage 3 标准主线为 AirSim＋PX4＋ROS＋SUPER（GNSS、无 LIO）；Docker 2 板端迁移入口及 NoDisplay 验证流程见 [AirSim README](stage3/super/airsim/README.md#robopi-算力后端2026-10-16迁移验证中)。已验证范围与换机接续见 [RoboPi 迁移交接](docs/stage3/RoboPi-handoff.md)。
+
+## PC AirSim 场景路径
+
+在 PC 仓库根目录首次配置（已有 `.env` 时只补充变量，保留已有密钥）：
+
+```sh
+cp -n .env.example .env
+```
+
+编辑 `.env.example` 中列出的配置，再按本机环境填写 `.env`：
+
+- `AIRSIM_NH`（SUPER）、`AIRSIM_TOWN05`（AeroVLA）、`AIRSIM_RACE`（竞速）直接指向 Linux ELF，保留完整场景包资源，布局为 `<包根>/<项目>/Binaries/Linux/<ELF>`。settings 仍由各阶段独立准备，不从 bins 目录读取。
+- `AEROVLA_API_URL`、`DINO_DETECT_URL` 是完整服务端点；`QWEN_BASE_URL` 是 OpenAI 兼容服务基址，配套 `QWEN_MODEL`。示例值不代表服务已启动。
+- Jev 使用 `JEV_BACKEND=typesafe|vllm`、`JEV_BASE_URL`、`JEV_MODEL` 和 `JEV_API_KEY`；vLLM System 1 另需模型头与校准 JSON，见 [Stage 5 操作说明](docs/stage5/Hands-on.md#jev-决策-clientpc)。RGB/depth 固定来自本机 8189 端口，不再提供两个环境变量。
+
+入口自动读取根 `.env`，无需 `source`。优先级为 shell > 根 `.env` > 旧阶段 `.env`（Stage 5 兼容）；显式客户端参数仍优先。根文件中空值也会覆盖旧阶段值。路径支持 `~`，相对路径以仓库根目录为基准。缺失或空的 AirSim 路径会明确报出变量名。
+
+SUPER/Town05 的 runtime 用 `binary_env` 选择变量，自动推导包根目录；自定义 JSON 仍支持原 `scene_dir` + `binary`。race 的显式 `--scene`、prepare 的 `--source` 仍接收包根目录并优先于环境配置。竞速关卡沿用 level 选择，共用 ADRL 包。更改路径后在下次启动生效，已运行实例使用原快照。
+
+文件不存在时检查 ELF 路径及完整包资源。配置解析不代表启动或飞行验收；操作见 [SUPER AirSim](stage3/super/airsim/README.md)、[AeroVLA](docs/stage4/Hands-on.md) 和 [race](docs/stage2/AirSim.md)。

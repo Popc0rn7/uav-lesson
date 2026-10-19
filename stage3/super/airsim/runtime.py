@@ -23,6 +23,8 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(ROOT / "src"))
+from uav_scene_env import scene_binary, scene_package
 import board_backend
 import virtual_display
 LABEL = "io.uav-lesson.airsim.owner"
@@ -73,8 +75,13 @@ def load_config(path):
         raise ValueError('board_profile 必须为布尔值')
     if config.get('planner_timing','baseline') not in ('baseline','robopi-relaxed','robopi-forward-200ms'):
         raise ValueError('planner_timing 必须为 baseline、robopi-relaxed 或 robopi-forward-200ms')
-    config["scene_dir"] = str(resolve(config["scene_dir"], path.parent))
-    config["binary"] = str(resolve(config["binary"], Path(config["scene_dir"])))
+    if config.get("binary_env"):
+        binary = scene_binary(config["binary_env"])
+        config["scene_dir"] = str(scene_package(binary))
+        config["binary"] = str(binary)
+    else:
+        config["scene_dir"] = str(resolve(config["scene_dir"], path.parent))
+        config["binary"] = str(resolve(config["binary"], Path(config["scene_dir"])))
     config["settings"] = str(resolve(config["settings"], path.parent))
     if config.get('super_task'):
         from task_config import load_task

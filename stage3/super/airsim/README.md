@@ -180,7 +180,7 @@ uv run --extra flight-review stage3/super/airsim/review_flight.py \
 
 ### 教师准备与场景配置
 
-PC Linux 需要可用的 Docker、图形桌面/Vulkan，以及完整的 AirSim 场景包。本机 AirSim 源码使用 `~/AirSim`，默认使用 **AirSimNH**，场景路径约定为 `/mnt/disk1/wqy/Airsim-Scene/AirSimNH/LinuxNoEditor`。2026-10-14 已确认本机源码、场景启动脚本、x86-64 ELF 与资源目录存在；脚本使用项目参数 `AirSimNH`，入口直接执行 `AirSimNH/Binaries/Linux/AirSimNH`。实际启动与飞行结果见上面的合并验证和下文独立控制证据。源码目录本身不能作为打包场景启动。镜像保留历史已验收 ID，当前 PC 使用前仍需核实该镜像存在，无需为路径调整重建镜像。
+PC Linux 需要可用的 Docker、图形桌面/Vulkan，以及完整的 AirSim 场景包。本机 AirSim 源码使用 `~/AirSim`，默认使用 **AirSimNH**，场景 ELF 由仓库根目录 `.env` 的 `AIRSIM_NH` 指定（配置见[根 README](../../../../README.md#pc-airsim-场景路径)）。2026-10-14 已确认本机源码、场景启动脚本、x86-64 ELF 与资源目录存在；脚本使用项目参数 `AirSimNH`，入口直接执行 `AirSimNH/Binaries/Linux/AirSimNH`。实际启动与飞行结果见上面的合并验证和下文独立控制证据。源码目录本身不能作为打包场景启动。镜像保留历史已验收 ID，当前 PC 使用前仍需核实该镜像存在，无需为路径调整重建镜像。
 
 常规 up/status/task/down 使用 `uv run`，MessagePack 已纳入项目依赖。下面的临时环境仅供包含 pymavlink 的诊断入口使用。
 
@@ -941,3 +941,5 @@ uv run --extra flight-review stage3/super/airsim/diagnostics/replay_video.py \
 ```
 
 回放按仿真时间展示已记录的 PX4 估计位置、下发参考、高度和速度；没有机体姿态的补造，不能把它当作相机实拍。点云只取当前时刻以前最后保存的一帧，并标注其年龄。视频、帧、点云和运行日志都留在忽略 Git 的 artifacts，不提交仓库。
+
+2026-10-18：NH/Town05/race 路径统一接入根 `.env`；本轮仅验证配置解析、ELF/资源存在和回归测试，未启动场景或飞行，既有飞行结论不变。

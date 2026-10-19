@@ -9,7 +9,7 @@ import mimetypes
 import os
 from pathlib import Path
 import struct
-import shlex
+import sys
 import time
 import urllib.error
 import urllib.request
@@ -19,20 +19,16 @@ import zlib
 HERE = Path(__file__).resolve().parent
 
 
+sys.path.insert(0, str(HERE.parent / 'src'))
+from uav_scene_env import configuration as environment_configuration
+
+
 def configuration():
-    values = {}
-    path = HERE / '.env'
-    if path.is_file():
-        for line in path.read_text().splitlines():
-            line = line.strip()
-            if not line or line.startswith('#'):
-                continue
-            key, separator, value = line.partition('=')
-            if not separator:
-                raise ValueError('stage5/.env 需要 KEY=value 格式')
-            parts = shlex.split(value, comments=True)
-            values[key.strip()] = ' '.join(parts)
-    return {**values, **os.environ}
+    config = environment_configuration(HERE / '.env')
+    # 相机由课程本机服务提供，固定一个地址；不从环境变量覆盖。
+    config.update(STAGE5_RGB_URL='http://127.0.0.1:8189/rgb',
+                  STAGE5_DEPTH_URL='http://127.0.0.1:8189/depth')
+    return config
 
 
 def annotation(response, image, filename, mock=False, estimates=None):

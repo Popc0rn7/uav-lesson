@@ -220,3 +220,5 @@ uv run --extra stage4 stage4/runtime.py task
 源评估器会将卡住、距离不下降和深度近碰撞都写入 collisions；这里保留 evaluation.legacy_collision 兼容标志，同时给出独立 reason。物理碰撞仍由 collision/flight_collision 字段记录，避免混淆。源端远距离 STOP 可能继续请求模型，本链路按既有 API 契约立即降落，不复现这一行为。report.json 和 control.json 包含 evaluation 的 oracle_success、early_end、stuck_count、最近距离与终止原因；每步 input.json 记录 depth_fractions，可离线复核。
 
 `/stage4/uav1/observation/depth` 为 std_msgs/String，包含同批 RGB 的 observation_time_s 和五向近距离像素占比。五向深度链路和新规则需要重新实飞；旧任务结果不能直接视为新评估规则下通过。
+
+场景路径配置：Town05 默认读取根 `.env` 的 `AIRSIM_TOWN05`。统一准备方法见[根 README](../../README.md#pc-airsim-场景路径)。

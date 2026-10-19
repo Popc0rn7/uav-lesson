@@ -7,7 +7,7 @@
 ## 本机环境约定
 
 - PC 本地 AirSim 源码使用 `~/AirSim`（当前为 `/home/wqy/AirSim`），优先在此核对接口、版本及已有构建产物；不再默认使用 `submodules/AirSim`，也不自动拉取、编译或覆盖本地源码。
-- 源码目录和打包场景目录是两项独立依赖。默认使用 AirSimNH，场景包位于 `/mnt/disk1/wqy/Airsim-Scene/AirSimNH/LinuxNoEditor`。2026-10-14 已核对场景启动脚本、x86-64 ELF 及资源目录；runtime 直接执行 `AirSimNH/Binaries/Linux/AirSimNH`，首个参数为 `AirSimNH`。AirSimNH 已有本机启动、短距离 RPC 往返与独立 PX4 Offboard 测试，具体通过/失败结果以 README 的本机证据为准；不能沿用 AbandonedPark 的历史记录宣称验收通过。
+- 源码目录和打包场景目录是两项独立依赖。默认使用 AirSimNH，场景 ELF 由根 `.env` 的 `AIRSIM_NH` 指定。2026-10-14 已核对场景启动脚本、x86-64 ELF 及资源目录；runtime 直接执行 `AirSimNH/Binaries/Linux/AirSimNH`，首个参数为 `AirSimNH`。AirSimNH 已有本机启动、短距离 RPC 往返与独立 PX4 Offboard 测试，具体通过/失败结果以 README 的本机证据为准；不能沿用 AbandonedPark 的历史记录宣称验收通过。
 - runtime 路径支持 `~`；换机器使用该机器用户的 home。场景包实际放在其他位置时，修改 `scene_dir` 和对应 `binary`，不要为满足默认路径移动整个源码目录或混用 ProjectAirSim 场景。
 - 保留当前宿主机 AirSim＋Docker PX4 的边界。先核实 Docker 镜像、桌面/Vulkan、场景 ELF 和资源，再按会话授权启动；历史镜像 ID 与历史飞行证据不能替代本机验收。
 

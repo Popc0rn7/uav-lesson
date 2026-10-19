@@ -1,6 +1,5 @@
 {
-  "scene_dir": "../../AeroVLA/envs/carla_town_envs/Town05/LinuxNoEditor",
-  "binary": "CarlaUE4/Binaries/Linux/CarlaUE4",
+  "binary_env": "AIRSIM_TOWN05",
   "scene_args": ["CarlaUE4", "-vulkan", "-windowed", "-ResX=960", "-ResY=540", "-nosound", "-norhithread"],
   "settings": "settings.json",
   "image": "px4io/px4-sitl-gazebo:latest",

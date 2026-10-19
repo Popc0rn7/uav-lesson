@@ -5,8 +5,12 @@ import hashlib
 import json
 from pathlib import Path
 import struct
+import sys
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / 'src'))
+from uav_scene_env import scene_binary, scene_package
+
 SOURCE_SHA256 = '094ad6b3cb8f55b63a05ab6ca9ee91e18c3eac1d21b64b20451302ba427c68bc'
 # clearTrajectory() 中唯一的 moveByVelocityInternal 虚调用。
 CALL_VA = 0x2d933a6
@@ -100,7 +104,8 @@ def prepare(source, destination, *, disable_lockstep=False):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--source', type=Path, default=ROOT/'submodules/drone-race/ADRL')
+    parser.add_argument('--source', type=Path, default=None)
     parser.add_argument('--output', type=Path, default=ROOT/'artifacts/stage2-airsim/package')
     args = parser.parse_args()
-    print(prepare(args.source, args.output.resolve()))
+    print(prepare(args.source if args.source is not None else scene_package(scene_binary('AIRSIM_RACE')),
+                  args.output.resolve()))

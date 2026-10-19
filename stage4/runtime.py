@@ -101,8 +101,22 @@ def start(config,directory):
             ros_image=read_image(config['ros_image']),model_service='externally managed',
             task_source=task.get('source')))
         return result
-    host.up(config,directory,ros_entrypoint='/lesson/stage4/run_nodes.sh',ros_check=check,
-            ros_runtime=dict(task=task,settings=settings(config,task),env=API_ENV,prepare_px4=prepare_px4))
+    from src.uav_scene_env import configuration
+    values = configuration()
+    previous = {key: os.environ.get(key) for key in API_ENV}
+    try:
+        for key in API_ENV:
+            if key in values:
+                os.environ[key] = values[key]
+        host.up(config,directory,ros_entrypoint='/lesson/stage4/run_nodes.sh',ros_check=check,
+                ros_runtime=dict(task=task,settings=settings(config,task),env=API_ENV,prepare_px4=prepare_px4))
+    finally:
+        for key, value in previous.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+
 
 
 def read_image(name):

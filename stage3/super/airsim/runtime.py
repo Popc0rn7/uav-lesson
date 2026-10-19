@@ -25,6 +25,7 @@ if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(ROOT / "src"))
 from uav_scene_env import scene_binary, scene_package
+from uav_env import read_env
 import board_backend
 import virtual_display
 LABEL = "io.uav-lesson.airsim.owner"
@@ -80,7 +81,15 @@ def load_config(path):
         config["scene_dir"] = str(scene_package(binary))
         config["binary"] = str(binary)
     else:
-        config["scene_dir"] = str(resolve(config["scene_dir"], path.parent))
+        scene = config["scene_dir"]
+        if scene == '${AIRSIM_SCENE_DIR}':
+            scene = read_env().get('AIRSIM_SCENE_DIR')
+            if not scene:
+                raise ValueError('请在根 .env 设置 AIRSIM_SCENE_DIR')
+            scene_base = ROOT
+        else:
+            scene_base = path.parent
+        config["scene_dir"] = str(resolve(scene, scene_base))
         config["binary"] = str(resolve(config["binary"], Path(config["scene_dir"])))
     config["settings"] = str(resolve(config["settings"], path.parent))
     if config.get('super_task'):

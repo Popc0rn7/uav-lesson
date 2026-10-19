@@ -24,6 +24,7 @@ description: Develop, port, run, and diagnose ROS 2 packages on OpenHarmony, inc
 ## 按需读取参考
 
 - C/C++ 包、目标依赖或 toolchain：读 [cross-build.md](references/cross-build.md)。
+- 整理 `.board-work`、SDK/toolchains 与主机 venv：读 [board-workspace.md](references/board-workspace.md)，使用 `scripts/board_workspace.py` 核验路径和主机环境；skill 不存放机器产物。
 - ROS 消息、Python native 扩展、NumPy ABI：另读 [python-interfaces.md](references/python-interfaces.md)。普通 Python 脚本通常只需安装。
 - 环境初始化、部署、launch、主机↔板端 DDS 和运行诊断：读 [runtime-dds.md](references/runtime-dds.md)。
 - 仿真替代真实传感器/控制器、时间与坐标适配：读 [interfaces.md](references/interfaces.md)。

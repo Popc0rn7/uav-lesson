@@ -11,10 +11,13 @@ import time
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'src'))
 from uav_hdc import shell
+sys.path.insert(0, str(ROOT/'houmo/src/stage1'))
+from service_config import read_ports
 
 
 def health(target):
-    probe="import json; from urllib.request import build_opener,ProxyHandler; h=json.load(build_opener(ProxyHandler({})).open('http://127.0.0.1:8080/health',timeout=3)); print(json.dumps(h))"
+    port=read_ports()['QWEN_PORT']
+    probe=f"import json; from urllib.request import build_opener,ProxyHandler; h=json.load(build_opener(ProxyHandler({{}})).open('http://127.0.0.1:{port}/health',timeout=3)); print(json.dumps(h))"
     import shlex
     data=json.loads(shell(target,'python3 -B -c '+shlex.quote(probe)))
     if data.get('status')!='ready' or data.get('model')!='qwen3.6-35b-a3b' or type(data.get('worker_pid')) is not int:
@@ -22,7 +25,7 @@ def health(target):
     pid=data['worker_pid']
     executable=shell(target,'readlink -f /proc/'+str(pid)+'/exe')
     if executable!='/data/local/workspace/stage1/qwen_infer/qwen_ohos_infer':
-        raise RuntimeError('8080 worker 不属于课程 Stage 1 部署')
+        raise RuntimeError('HTTP worker 不属于课程 Stage 1 部署')
     data['start_ticks']=shell(target,"cat /proc/"+str(pid)+"/stat").rsplit(')',1)[1].split()[19]
     return data
 

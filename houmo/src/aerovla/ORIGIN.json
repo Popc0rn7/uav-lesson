@@ -1,0 +1,10 @@
+{
+  "source": "aerovla_infer (用户提供，未跟踪目录)",
+  "files": {
+    "runner.py": "0d852d9ed36ee4ffb9eb882f8a77eb12036d2fc84a434acb7899ebb736ef9612",
+    "service.py": "a228a178d97fd42efeeef182bbf0df53478d0d9d81fbc8364ed808f4f5058a46",
+    "smoke.py": "5ee509c22528a6bd7b8f2025271466a8261bcd1ed00df03900a726893de5bdfa",
+    "start_service.sh": "5177454ad4ac6c81630f35532a025de0af838460d7a8ca5263a0333ceb17eb3d"
+  },
+  "note": "仅吸纳模型推理；不吸纳 orchestrator_board.py、tools/prep_episode.py 的仿真任务与远端机器配置。源码和权重许可仍待核实。"
+}

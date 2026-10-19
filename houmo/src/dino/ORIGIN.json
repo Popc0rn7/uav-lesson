@@ -1,0 +1,24 @@
+{
+  "upstream": "postmo-modelzoo/grounding_dino_ohos_infer",
+  "head": "9121ddac32d0d1a7317103a592b22f955d656050",
+  "note": "上游目录未跟踪；Python 按课程已获取运行包吸纳，原生 main.cc 按上游当前源码吸纳；本次复用旧 ELF，未重编译。",
+  "sha256": {
+    "CMakeLists.txt": "55116b096dd1251a43d22ec05d189c382e1da14ba2e7aff1f312aec1d578e127",
+    "LICENSE": "c24d7bf1acbc39b7e94f7a3ad94309495a15e0bbc0f25e6e5e32730cb718da69",
+    "benchmark_latency.py": "144b8386ef9ddeba8da275e1581581bc92314d742230a2109f465bbd870ef182",
+    "bert_tokenizer.py": "2af5fa75d2c6dd08ab1713c984aa04a05318c636a1a0e0b760239d86264fe8a7",
+    "check_preprocess.py": "ebb83a8e211c4e9d031f3aca0d4e9c6b14fd9d208fe9bf2d32d7cf333e7bf88b",
+    "client.py": "375fdc3ede10d28f0d1ff5f3b7c675c8fd0046095816ee0f6f24ee18a7bf3bb7",
+    "compare_detections.py": "6b076d34d8d3ccf40fac61cdc683a340f05ad048c52555b674a4f97d8eeb456c",
+    "image_resize.py": "39eb33aa060a2d82876e27eda1f94b07a5e64f5fc12fbf5fb2883e57195d2130",
+    "main.cc": "a6eef2de7c5badc571cc1884e67de650ef65d2852cc2202710ac0442e64e837e",
+    "pipeline.py": "9f26c30d472beaa9f74fde163132ae1cf295410708dc53a7e7cd676b5970ca46",
+    "requirements-board.txt": "d35d049ab62f141b8cd40976181ab243933035aecc1a1cf62e225a86cb3237dc",
+    "run.sh": "23fef50a6a4c62496e47accc5e674a03f34a45b4f8cef03391be263121ade5ee",
+    "server.py": "f0879a605c56b4be7d9dec1d3458d534122b16e75179e64de8e7a7f90870dcaf",
+    "summarize_latency.py": "eae8be376b18ed5fd56e5bb5ec05d19f20e782f2fa3e00b41b5b13dbfadf448a",
+    "tensor_io.py": "5f23a0e3be9cef48467f3cf9215679f7e2f0119bd9df84e80640714427a037fb",
+    "tests/test_http.py": "3e651c3e2ede2e7594b3be0ed098dd9873dfba7cfe975b67200437a474d3561a",
+    "validate_bundle.py": "c094b651b669dbdf6fe49c597d6c66e58ab6d09f4e420a9f1821cc3dcee5b692"
+  }
+}

@@ -16,6 +16,8 @@ ROOT=Path(__file__).resolve().parents[2]
 WORK=ROOT/'artifacts/robopi-stage3'
 sys.path.insert(0,str(ROOT/'stage3/super/airsim'))
 import board_backend
+sys.path.insert(0,str(ROOT/'src'))
+from uav_env import configured_path
 
 
 def digest(path):
@@ -37,12 +39,13 @@ def extract(archive, output):
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--target',required=True)
-    parser.add_argument('--sdk',type=Path,required=True)
-    parser.add_argument('--host-python',type=Path,required=True)
+    parser.add_argument('--sdk',type=Path,help='默认读取根 .env 的 OHOS_SDK')
+    parser.add_argument('--host-python',type=Path,help='默认读取根 .env 的 OHOS_HOST_PYTHON')
     parser.add_argument('--resume-remote', help='恢复本次中断导出，指定已核实属于本项目的远端归档')
     parser.add_argument('--reuse-archive',action='store_true',help='复用本次已校验归档；仍重新核验设备 ABI')
     args=parser.parse_args()
-    sdk=args.sdk.resolve();host=args.host_python.expanduser().absolute()
+    sdk=(args.sdk or configured_path('OHOS_SDK')).resolve()
+    host=(args.host_python or configured_path('OHOS_HOST_PYTHON')).expanduser().absolute()
     for path in (sdk/'build/cmake/ohos.toolchain.cmake',host):
         if not path.is_file():raise FileNotFoundError(path)
     board_backend.preflight(args.target)

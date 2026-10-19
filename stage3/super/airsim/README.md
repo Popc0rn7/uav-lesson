@@ -943,3 +943,9 @@ uv run --extra flight-review stage3/super/airsim/diagnostics/replay_video.py \
 回放按仿真时间展示已记录的 PX4 估计位置、下发参考、高度和速度；没有机体姿态的补造，不能把它当作相机实拍。点云只取当前时刻以前最后保存的一帧，并标注其年龄。视频、帧、点云和运行日志都留在忽略 Git 的 artifacts，不提交仓库。
 
 2026-10-18：NH/Town05/race 路径统一接入根 `.env`；本轮仅验证配置解析、ELF/资源存在和回归测试，未启动场景或飞行，既有飞行结论不变。
+
+### 2026-10-19 本机场景路径配置
+
+本仓库默认 runtime.*.json 使用 `"binary_env": "AIRSIM_NH"`，从根 `.env` 或同名环境变量读取场景 ELF 路径，环境变量优先。包根由 `<包根>/<项目>/Binaries/Linux/<ELF>` 结构推导。旧自定义配置仍支持显式 scene_dir/binary；其中 `${AIRSIM_SCENE_DIR}` 兼容从根 `.env` 读取场景目录，相对环境路径以仓库根为基准，其他相对 scene_dir 以配置目录为基准。本次未复制/重编译场景或启动仿真。
+
+板端准备入口 prepare.py 的 --sdk/--host-python 可省略，默认读取根 .env 的 OHOS_SDK/OHOS_HOST_PYTHON；显式 CLI 参数优先。OHOS_TOOLCHAINS_DIR 指向 SDK 配套 toolchains（含 hdc），不等于 Native SDK 根。主机工作区核验由仓库 skills/oh-ros2/scripts/board_workspace.py --project . 管理，流程见该 skill 的 references/board-workspace.md。

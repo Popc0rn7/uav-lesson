@@ -1,12 +1,13 @@
 # RoboPi 开发与交付约定
 
-本目录维护实际要传到 OpenHarmony RoboPi 的课程程序、启动脚本及配置。PC 部署工具留在 `stageN/`，双 Docker 仿真留在 `develop/` 和各阶段目录。RoboPi 替代 ROS 算力容器，PX4/Gazebo、QGC、可视化及真值评测继续在 PC；算力算法不部署到 PX4。
+本目录维护实际要传到 OpenHarmony RoboPi 的课程程序、启动脚本及配置；Stage 1 厚摩交付例外统一在 `houmo/`。PC 部署工具留在 `stageN/`，双 Docker 仿真留在 `develop/` 和各阶段目录。RoboPi 替代 ROS 算力容器，PX4/Gazebo、QGC、可视化及真值评测继续在 PC；算力算法不部署到 PX4。
 
 ## 文件与部署边界
 
-- `stage1/` 对应板端 `/data/local/workspace/stage1/`；PC 部署入口为 `python3 stage1/deploy.py --target <connect-key>`，设备标识不写入源码。迁移只改变 PC 源路径，板端路径保持原值。
-- `stage1/qwen_infer/` 是忽略 Git 的上游运行产物，获取及部署步骤只维护在 [教师准备流程](../docs/AGENTS.md)。不要维护其 C++、转换工程或构建源码副本。
-- 模型缓存留在 `artifacts/models/`，按部署入口传到板端 models 目录；不在本目录复制大模型。
+- Stage 1 厚摩相关内容已集中到 `houmo/`：`houmo/src/stage1/` 维护课程板端源码，`houmo/src/qwen/`、`houmo/src/dino/`、`houmo/src/aerovla/` 维护模型应用源码，编译入口在 `houmo/src/compile/`，这些进入 Git。
+- `houmo/build/` 为本机目标产物/缓存，`houmo/deploy/` 为完整上传目录，均忽略 Git；布局和装配入口见 [厚摩交付](../houmo/README.md)。不再在 robopi/stage1/ 混放源码和运行包。
+- 板端 Stage 1 路径仍为 `/data/local/workspace/stage1/`；PC 入口为 `stage1/deploy.py` / `stage1/deploy_dino.py`，显式指定 `--target`，仅从装配清单发送。
+- Stage 1 模型实际文件集中在 `houmo/models/`，公共依赖快照在 `houmo/deps/`，均忽略 Git；部署从 houmo/deploy/ 发送。其他历史 artifacts 本次不迁移。
 - `stage3/` 维护 AirSim/SUPER 板端启动、进程管理、DDS 与共享源码链接；PC 打包时解引用链接，单独加入目标构建 install。入口与未验证边界见 [AirSim README](../stage3/super/airsim/README.md#robopi-算力后端2026-10-16迁移验证中)。
 - 新阶段只有出现实际板端文件才建立目录。Stage 5 尚无板端交付物；不复制 PC 目录制造迁移完成的假象。
 - 不整体发送本目录或仓库。按部署入口选择交付文件，排除 AGENTS.md、skills、测试、缓存、日志和凭据。现有 Stage 1 使用显式文件清单。

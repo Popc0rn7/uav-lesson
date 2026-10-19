@@ -1,0 +1,13 @@
+# RoboPi 板端：python3 -m pip install -r requirements.txt
+# Stage 1 服务与 Stage 3 Python 节点的第三方依赖。
+# NumPy/OpenCV 的板端分发元数据与实际导入版本不一致，暂不固定版本。
+numpy
+opencv-python
+PyYAML==6.0.3
+uvicorn==0.54.0
+h11==0.16.0
+fastapi==0.144.0
+starlette==1.8.0
+pydantic==2.12.5
+
+# ROS/rclpy、ROS 消息和 tcim_lite 由镜像、课程构建或 SDK 提供，不从 PyPI 安装。

@@ -19,11 +19,11 @@ PC 运行 PX4 SITL 与 Gazebo／AirSim 仿真，以及 QGroundControl、GUI 和�
 
 课程新主线从 Stage 2 使用“PC AirSim＋PX4 仿真容器”，自主算法阶段再增加 ROS 2 Humble 算力容器，后续由 RoboPi 替代算力容器。[Stage 2 AirSim 入口与验证范围](docs/stage2/AirSim.md)记录当前适配。既有 Gazebo 模块、实验配置与迁移工具见 [开发框架](develop/README.md)；该框架尚未接入新的 Stage 2 竞速入口。在 PC 仓库根目录运行 `python3 develop/lesson.py list` 查看已接入实验，`python3 develop/lesson.py up --dry-run` 查看启动命令。
 
-- Stage 1：ROS 常驻模型聊天链路，PC 入口位于 `stage1/`，板端文件位于 `robopi/stage1/`；上游运行产物和模型需课前获取，操作见 [Hands-on](docs/stage1/Hands-on.md)。
+- Stage 1：ROS 常驻模型聊天链路，PC 入口位于 `stage1/`，板端源码与编译入口位于 `houmo/src/`，上传包统一装配到 `houmo/deploy/`（见 [厚摩交付](houmo/README.md)）；目标 ELF 和模型需课前准备，操作见 [Hands-on](docs/stage1/Hands-on.md)。
 - Stage 2：新的 [AirSim＋单 PX4 Docker 入口](docs/stage2/AirSim.md)直接通过 MAVLink 验证起降和短程往返，Stage 2 不需要 ROS 容器；原生固定准备区与手动开赛流程已获用户验收，完整穿门竞速待验收。既有 Gazebo 标准机 `x500_experiment`、QGC 操作、四图展示和排障保留在 [Hands-on](docs/stage2/Hands-on.md)；历史证据见 [实测记录](docs/stage2/Validation.md)。
 - Stage 3：SUPER＋PX4/GNSS；Gazebo 无附加标记走廊 2 m/s XYZ 往返与三窗口已验收，FAST-LIO2 保留为显式对照。当前标准主线为 AirSim，低速短程／树林往返及 RoboPi 原生 1 m/s 短程／forest1 往返已通过，完整 AB 长任务未通过；[Gazebo 操作](docs/stage3/Hands-on.md)、[Gazebo 验证](docs/stage3/Validation.md)、[AirSim 操作](stage3/super/airsim/README.md)、[板端验证](docs/stage3/RoboPi-validation.md)。统一算法对照、Stage 3 视觉接入和聊天 GUI 尚未完成。
 
-- Stage 4：AeroVLA 外部推理 API＋Town05 AirSim＋PX4／ROS 双 Docker；任务导出、轻量 uv 环境、WebUI、传感器与动作执行入口见 [Hands-on](docs/stage4/Hands-on.md)，实际验收范围见 [Validation](docs/stage4/Validation.md)。模型服务留在旧仓库，上板后续实现。
+- Stage 4：AeroVLA 外部推理 API＋Town05 AirSim＋PX4／ROS 双 Docker；任务导出、轻量 uv 环境、WebUI、传感器与动作执行入口见 [Hands-on](docs/stage4/Hands-on.md)，实际验收范围见 [Validation](docs/stage4/Validation.md)。板端模型 HTTP 服务见 [AeroVLA](houmo/src/aerovla/README.md)，本阶段与板端的联合链路仍待验收。
 - Stage 5：Qwen分阶段规划与验收、Jev执行、红车RGBD跟随及只读任务灯箱；[架构与关键问题](docs/stage5/Agent.md)、[运行步骤](docs/stage5/Hands-on.md)、[验证记录](docs/stage5/Validation.md)。当前仅为指定街区的PC仿真demo，未验证通用目标、复杂绕障或实机。
 
 ## Stage 2 标准机入口

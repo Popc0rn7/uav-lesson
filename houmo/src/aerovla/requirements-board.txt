@@ -1,0 +1,3 @@
+# NumPy 和匹配 OHOS/Python ABI 的 tcim_lite，版本由目标镜像核实。
+# tcim_lite 来自 TCIM SDK，不从 PyPI 安装同名包。
+numpy

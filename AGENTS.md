@@ -66,6 +66,7 @@
 - 已按用户要求改回 AB 默认基线。AB 5 m/s 的显式点云仅观察实验中，有效云空窗 6.598 秒仍持续接收 649 条规划指令、前进约 22.69 m；点云恢复后停在轨迹端点，连续 A* 失败及停点保持到期后因指令失流降落，无碰撞、未到 B。默认点云策略仍为 land，实验 observe 不自动扩展到其他任务；证据及日志时基纠错见 docs/stage3/RoboPi-validation.md。
 - AirSim 已提供 PC 无窗口低频第三人称 RGB 录像和实际遥测／点云离线 MP4 回放，入口 flight_video.py、diagnostics/replay_video.py；操作见 AirSim README。AB 5 m/s 录像轮峰值 5.350 m/s，规划参考越东侧 20 m 边界后降落，无报告碰撞、已解除解锁，未到 B；视频输出与性能开销见迁移验证。
 - Stage 1 新布局已于 2026-10-16 完整部署校验并通过真实以太网 ROS 两次文本、空请求拒绝、桥重启复用同一 worker、并发 429 和单图 VQA；DMA/CMA probe 失败经授权重启后早期加载驱动恢复，证据见 docs/stage1/Hands-on.md。自主飞行 API 和 PC 聊天 GUI 尚未实现。
+- AeroVLA 模型推理已于 2026-10-19 通过 RoboPi vision/prefill golden 与真实 HTTP 完整生成、常驻复用、非法请求及忙时拒绝；默认端口 8084，统一部署入口 stage1/deploy.py。仅已预处理张量＋token 模型链路，不含任意图文预处理或飞行控制；身份、证据和遗留状态见 houmo/src/aerovla/README.md。
 - Stage 2 标准机为 `x500_experiment`（Orbbec Gemini 2 RGBD 几何近似＋MID-360S 规则 GPU 扫描近似），引用独立 `mid360s` 模型；启动时两个模型目录均需挂载。四图基础展示已获用户确认，改装后完整飞行仍待验收；操作与相机配置实测见 `docs/stage2/Hands-on.md`。
 - 路线与完成状态见 `docs/roadmap.md`。只有实际可运行并有验证证据的功能才标记完成。
 
@@ -88,14 +89,14 @@
 ## 仓库布局
 
 - `stageN/`：该阶段在 PC 使用的代码和部署入口。
-- `robopi/`：板端交付文件的唯一维护位置，按 `stageN/` 对应板端阶段目录；开发、部署和迁移验收遵循 `robopi/AGENTS.md`。
+- `robopi/`：各阶段板端交付文件；Stage 1 厚摩源码、编译和上传包统一在 `houmo/`。开发、部署和迁移验收遵循 `robopi/AGENTS.md`。
 - `skills/`：仓库维护的 Codex 板端 skills，随代码同步；使用时读取对应 `SKILL.md`，不要只依赖个人目录中的旧副本。
 - `src/`：仅放跨阶段通用工具或包，没有则不创建。
-- `artifacts/models/`：大模型缓存或软链接；embedding 位于模型目录 hmquant/quant_embedding.bin，部署保持整个模型目录的相对结构。大文件不提交 Git。
+- `houmo/models/`：Stage 1 模型实际文件与分词器，独立复制并忽略 Git；`houmo/deps/` 保存公共引擎和 TCIM 依赖快照。embedding 位于模型目录 hmquant/quant_embedding.bin，保持相对结构。历史 artifacts 本次不迁移。
 - `docs/`：课程文档；`docs/AGENTS.md` 是代理准备板端环境的流程，随实现跟进。
 
-上游推理工具直接获取运行产物，Stage 1 放在 robopi/stage1/qwen_infer/ 并忽略跟踪。
-不复制维护上游 main.cc、编译工程或模型转换源码，不再使用 prepare_qwen_bundle.py 和 manifest。
+Stage 1 厚摩相关内容统一在 houmo/：src/ 维护 C++、Python、启动脚本及 compile/ 编译入口并进入 Git；build/ 为忽略 Git 的目标产物与缓存，deploy/ 为忽略 Git 的完整上传目录。操作入口见 houmo/README.md。
+修改源码只改 src/，从匹配 ELF 和模型缓存重新装配 deploy/；不编辑生成包。Qwen 公共依赖已集中复制到 houmo/deps/；SDK/toolchains、主机 Python 和 AirSim 场景 ELF 路径由根 .env 指定。skill 管理工作区流程，不保存机器产物。
 不预建空目录，不为同一流程维护重复说明。
 
 ## 验证与报告

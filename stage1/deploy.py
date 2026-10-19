@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""PC：将 robopi/stage1 和模型目录部署到固定板端目录。"""
+"""PC：统一装配、校验并上传 Qwen / DINO / AeroVLA 模型运行包。"""
 import argparse
 import hashlib
 from pathlib import Path
@@ -9,38 +9,30 @@ import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 TARGET = ""  # main() 从显式 --target 设置；不保存设备标识。
-BOARD = ROOT / "robopi/stage1"
 REMOTE_STAGE = "/data/local/workspace/stage1"
-MODEL = ROOT / "artifacts/models/Qwen3.6-35B-A3B/qwen3.6-35b-a3b_w4a8_256_256k_b1_1chip_2cores"
-REMOTE_MODEL = "/data/local/workspace/models/" + MODEL.name
 
-
-def require_file(path):
-    if not path.is_file() or path.stat().st_size == 0:
-        raise FileNotFoundError(f"缺少文件或文件为空：{path}")
-    with path.open('rb') as stream:
-        if stream.read(80).startswith(b'version https://git-lfs.github.com/spec/v1'):
-            raise ValueError(f"文件仍为 Git LFS 指针：{path}")
-    return path
-
-
-def collect_files():
+def collect_files(service="qwen", with_smoke=False):
+    import sys
+    sys.path.insert(0, str(ROOT / 'houmo/src/compile'))
+    from package_runtime import assemble
+    services = ('qwen', 'dino', 'aerovla') if service == 'all' else (service,)
     files = []
-    for name in ("serve.sh", "ros_env.sh", "chat_node.py", "backend.py",
-                 "qwen_infer/qwen_ohos_infer", "qwen_infer/run.sh",
-                 "qwen_infer/run.py", "qwen_infer/models.json", "qwen_infer/vqa_client.py",
-                 "qwen_infer/server.py", "qwen_infer/requirements-server.txt",
-                 "qwen_infer/lib/libhoumo_infer.so", "qwen_infer/lib/libtokenizer_lib.so",
-                 "qwen_infer/LICENSE"):
-        files.append((require_file(BOARD / name), REMOTE_STAGE + "/" + name))
-    if not MODEL.is_dir():
-        raise FileNotFoundError(f"缺少模型目录：{MODEL}")
-    require_file(MODEL / "hmquant/quant_embedding.bin")
-    if not any(MODEL.glob('*_visual_m*.hmm')):
-        raise FileNotFoundError(f"模型缺少 VQA 所需的动态视觉图 *_visual_m*.hmm：{MODEL}")
-    files.extend((require_file(path), REMOTE_MODEL + "/" + str(path.relative_to(MODEL)))
-                 for path in sorted(MODEL.rglob('*')) if path.is_file())
-    return files
+    for selected in services:
+        files.extend(assemble(selected))
+    if with_smoke:
+        if 'aerovla' not in services:
+            raise ValueError('--with-smoke 当前用于 AeroVLA 或 all')
+        from aerovla_package import assemble_smoke
+        import package_runtime
+        files.extend(assemble_smoke(package_runtime))
+    # 多模型共享 .env/service_config.py；重复目的路径必须对应同一内容。
+    unique = {}
+    for source, destination in files:
+        if destination in unique and unique[destination] != source:
+            if unique[destination].read_bytes() != source.read_bytes():
+                raise ValueError('共享交付文件冲突：' + destination)
+        unique[destination] = source
+    return [(source, destination) for destination, source in unique.items()]
 
 
 def hdc(*args, timeout=60):
@@ -61,20 +53,10 @@ def shell(command, timeout=60):
     return output
 
 
-def main():
+def deploy_files(files, target, executable=None):
+    """按显式清单校验上传；相同文件跳过，不同文件拒绝覆盖。"""
     global TARGET
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--target', help='实际部署必须显式选择本次 HDC connect key')
-    parser.add_argument('--check-local', action='store_true', help='只检查本地交付物，不连接设备')
-    args = parser.parse_args()
-    if not args.check_local and not args.target:
-        parser.error('实际部署需要 --target')
-    TARGET = args.target or ''
-    # 本地文件全部检查通过后才连接设备；不依赖打包脚本或 manifest。
-    files = collect_files()
-    if args.check_local:
-        print(f'本地交付物检查通过，共 {len(files)} 个文件；未连接设备')
-        return
+    TARGET = target
     import json, sys, tempfile
     with tempfile.TemporaryDirectory() as temporary:
         manifest = Path(temporary)/'checks.json'
@@ -112,8 +94,35 @@ print(h.hexdigest(),p,flush=True)
         shell("mkdir -p " + quote(str(Path(destination).parent)))
         hdc("file", "send", str(source), destination, timeout=3600)
         shell(f'test "$(sha256sum {dest} | cut -d " " -f 1)" = {quote(checksum)}', timeout=3600)
-    shell("chmod 700 " + quote(REMOTE_STAGE + "/qwen_infer/qwen_ohos_infer"))
-    print("传输和校验完成。板端启动：cd " + REMOTE_STAGE + " && sh serve.sh")
+    if executable is not None:
+        shell("chmod 700 " + quote(executable))
+
+
+def main():
+    global TARGET
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--service', choices=('qwen', 'dino', 'aerovla', 'all'), default='qwen')
+    parser.add_argument('--with-smoke', action='store_true', help='额外上传 AeroVLA golden、smoke 与固定请求，不执行')
+    parser.add_argument('--target', help='实际部署必须显式选择本次 HDC connect key')
+    parser.add_argument('--check-local', action='store_true', help='只检查本地交付物，不连接设备')
+    args = parser.parse_args()
+    if not args.check_local and not args.target:
+        parser.error('实际部署需要 --target')
+    TARGET = args.target or ''
+    # 本地文件全部检查通过后才连接设备；不依赖打包脚本或 manifest。
+    try:
+        files = collect_files(args.service, args.with_smoke)
+    except (FileNotFoundError, ValueError) as error:
+        parser.exit(1, str(error) + "\n")
+    if args.check_local:
+        print(f'{args.service} 本地交付物检查通过，共 {len(files)} 个文件；未连接设备')
+        return
+    deploy_files(files, TARGET)
+    if args.service in ('qwen', 'all'):
+        shell('chmod 700 ' + shlex.quote(REMOTE_STAGE + '/qwen_infer/qwen_ohos_infer'))
+    if args.service in ('dino', 'all'):
+        shell('chmod 700 ' + shlex.quote(REMOTE_STAGE + '/grounding_dino_infer/grounding_dino_infer'))
+    print('传输和校验完成；尚未启动服务。启动入口见 houmo/README.md。')
 
 
 if __name__ == "__main__":
